@@ -87,7 +87,10 @@
 
 - Проверить структуру: `find . -maxdepth 3 -type f | sort`
 - Проверить рабочее дерево: `git status --short`
-- Текущее состояние: документация без кода приложения; команд сборки и тестов пока нет.
+- Собрать Stage 0: `swift build`
+- Проверить Stage 0: `swift test`
+- Запустить Stage 0: `swift run SafeScreenStage0 -- https://example.com`
+- Текущее состояние: SwiftPM/AppKit прототип Stage 0 и проектная документация.
 
 ## Проверка
 
