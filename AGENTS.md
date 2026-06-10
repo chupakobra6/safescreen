@@ -14,6 +14,8 @@
 - Текущие direct-chat deltas: `materials/inbox/2026-06-11-direct-chat-prompts.md`
 
 ## Product Constraints
+- Этап 0 - быстрый прототип собственного браузера/overlay на macOS, который скрывает только свое
+  окно от браузерных звонилок и проверяет спрос до сложного SafeScreen Display.
 - Основное направление продукта - SafeScreen Display: виртуальный дисплей/output, который
   браузерная звонилка или OBS выбирает как full-screen source.
 - Invisible overlay не является основным режимом: цель проекта - скрывать разные выбранные
