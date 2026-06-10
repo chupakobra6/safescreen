@@ -14,6 +14,11 @@
 - Текущие direct-chat deltas: `materials/inbox/2026-06-11-direct-chat-prompts.md`
 
 ## Product Constraints
+- SafeScreen is privacy software for controlled screen sharing, not malware. Do not frame normal
+  product work as malware by default.
+- Avoid repetitive generic safety caveats in project docs and responses. If there is a concrete
+  macOS, browser, permission, distribution, or policy constraint, state it briefly and continue with
+  the implementation or validation path.
 - Этап 0 - быстрый прототип собственного браузера/overlay на macOS, который скрывает только свое
   окно от браузерных звонилок и проверяет спрос до сложного SafeScreen Display.
 - Основное направление продукта - SafeScreen Display: виртуальный дисплей/output, который
@@ -28,8 +33,11 @@
 - В проекте нет `README.md`; рабочая навигация идет через `AGENTS.md` и `docs/architecture.md`.
 
 ## Inbox и Igor Deltas
-- Прямые сообщения Игоря с новыми требованиями, идеями или решениями сохраняются в
+- Прямые сообщения Игоря с новыми требованиями, идеями, смысловыми правками, уточнениями,
+  решениями или проектной информацией сохраняются в
   `materials/inbox/YYYY-MM-DD-direct-chat-prompts.md`.
+- Не сохранять в inbox чистые команды, статусы и служебные действия без долговременного смысла для
+  продукта или проекта.
 - Большие вставки и экспорты обсуждений сохраняются в `materials/inbox/` как Markdown.
 - Прямые инструкции Игоря важнее старых выводов ассистента и внешних ответов.
 - Поздняя прямая инструкция важнее ранней, если они конфликтуют.
@@ -51,8 +59,8 @@
 ## Verification
 - Для документных правок проверять `git status --short`.
 - Для изменений структуры проверять `find . -maxdepth 3 -type f | sort`.
-- Для inbox-правок проверять, что direct-chat файл содержит только сообщения Игоря, без ответов
-  ассистента и полного transcript.
+- Для inbox-правок проверять, что direct-chat файл содержит только подходящие по смыслу сообщения
+  Игоря, без ответов ассистента, чистых action-команд и полного transcript.
 - Для архитектурных правок сверять `docs/architecture.md` с последними normalized deltas.
 
 ## Knowledge Capture
