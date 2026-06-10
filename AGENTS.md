@@ -11,7 +11,6 @@
 ## Источники
 - Архитектура и уровни разработки: `docs/architecture.md`
 - Inbox с прямыми инпутами: `materials/inbox/`
-- Полный raw-экспорт обсуждения: `materials/inbox/2026-06-11-full-raw-safescreen-discussion.md`
 - Текущие direct-chat deltas: `materials/inbox/2026-06-11-direct-chat-prompts.md`
 
 ## Inbox и Igor Deltas
