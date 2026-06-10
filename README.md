@@ -82,11 +82,24 @@ Activity Monitor пока не трогаем вообще.
 - без virtual display и без audio.
 ```
 
+## Inbox и Igor deltas
+
+Прямые сообщения Игоря с новыми требованиями, решениями или идеями сохраняются в
+`materials/inbox/YYYY-MM-DD-direct-chat-prompts.md`.
+
+Правила:
+
+- прямые инструкции Игоря важнее моих прошлых выводов и внешних ответов;
+- поздняя прямая инструкция важнее ранней, если они конфликтуют;
+- активный README показывает текущее решение, а не историю споров;
+- сырая история и причины изменений лежат в inbox и git history;
+- перед финалом по задаче я сверяю свежие инпуты из inbox с тем, что реально изменил.
+
 ## Репозиторий
 
 ```bash
 cd /Users/igor/projects/safescreen
-find . -maxdepth 2 -type f | sort
+find . -maxdepth 3 -type f | sort
 ```
 
 Пока это planning repo без кода. Build-команды добавим, когда появится первый macOS skeleton.
