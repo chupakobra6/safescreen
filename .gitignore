@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Local build and runtime artifacts.
+.build/
+build/
+DerivedData/
+dist/
+out/
+
+# Local captures, logs, and generated validation artifacts.
+captures/
+recordings/
+screenshots/
+logs/
+.state/
+
+# Editor state.
+.vscode/
+.idea/
