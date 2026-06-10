@@ -6,6 +6,7 @@
 ## Связанные документы
 
 - [../AGENTS.md](../AGENTS.md) - правила работы агентов, область документации и проверки.
+- [runbook.md](runbook.md) - команды запуска, сборки, проверок и ручных сценариев.
 - [igors-deltas.md](igors-deltas.md) - единые нормализованные выводы из прямых входов Игоря.
 - [../materials/inbox/2026-06-11-direct-chat-prompts.md](../materials/inbox/2026-06-11-direct-chat-prompts.md)
   - дневной склад сырых прямых сообщений за 2026-06-11.
@@ -81,8 +82,7 @@ Mac, а в звонок или стрим отдает отдельный выв
 
 - в корне есть SwiftPM-пакет с executable product `SafeScreenStage0`;
 - тестируемая логика URL и стартовой страницы вынесена в `SafeScreenStage0Core`;
-- запуск: `swift run SafeScreenStage0 -- https://example.com`;
-- сборка и проверка: `swift build`, `swift test`;
+- запуск, сборка и проверка описаны в [runbook.md](runbook.md);
 - минимальная платформа пакета - macOS 14.
 
 Проверяем:
