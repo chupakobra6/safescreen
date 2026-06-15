@@ -2,7 +2,6 @@ import AppKit
 
 final class BrowserPanel: NSPanel {
     private static let defaultContentSize = NSSize(width: 1280, height: 800)
-    private static let minimumContentSize = NSSize(width: 980, height: 640)
 
     private var acceptsKeyboardFocus = false
 
@@ -32,7 +31,6 @@ final class BrowserPanel: NSPanel {
         isOpaque = true
         backgroundColor = .windowBackgroundColor
         alphaValue = 1.0
-        contentMinSize = Self.minimumContentSize
         level = .floating
         sharingType = .none
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]

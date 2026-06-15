@@ -34,6 +34,8 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         field.placeholderString = "https://example.com"
         field.font = .systemFont(ofSize: 14)
         field.lineBreakMode = .byTruncatingMiddle
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.delegate = self
         field.target = self
         field.action = #selector(loadAddressFromField)
@@ -135,8 +137,6 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
             toolbar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             toolbar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             toolbar.topAnchor.constraint(equalTo: view.topAnchor),
-
-            addressField.widthAnchor.constraint(greaterThanOrEqualToConstant: 320),
 
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),

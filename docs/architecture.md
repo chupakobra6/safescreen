@@ -28,8 +28,8 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - `NSPanel` с `.nonactivatingPanel`, `level = .floating`,
   `sharingType = .none`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`;
-- непрозрачное читаемое окно по умолчанию с content size `1280x800` и минимальным размером
-  `980x640`;
+- непрозрачное читаемое окно по умолчанию с content size `1280x800`; приложение не задает большой
+  минимальный размер окна, чтобы окно можно было свободно ресайзить;
 - переключение видимости окна через Carbon hotkey `Option+Shift+S`;
 - отдельный input mode: окно принимает клавиатурный фокус только при взаимодействии с адресной
   строкой или содержимым страницы;
