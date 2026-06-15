@@ -41,6 +41,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         panel.contentViewController = viewController
+        panel.applyDefaultContentSize()
         panel.center()
         panel.setInputMode(false)
         panel.orderFrontRegardless()

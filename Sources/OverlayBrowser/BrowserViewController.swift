@@ -48,6 +48,9 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         let view = FocusAwareWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = self
         view.allowsBackForwardNavigationGestures = true
+        view.underPageBackgroundColor = .clear
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
         view.onInputIntent = { [weak self] in
             self?.enterInputMode()
         }
@@ -199,7 +202,6 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
 
     private func loadAddress(from rawValue: String) {
         guard let url = URLArgumentParser.normalizedURL(from: rawValue) else {
-            NSSound.beep()
             updateAddressFromWebView()
             return
         }

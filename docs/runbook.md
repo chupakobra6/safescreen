@@ -39,9 +39,11 @@ swift run OverlayBrowser
 - без URL открывается встроенная стартовая страница;
 - URL без схемы нормализуется в `https://...`;
 - `Option+Shift+S` показывает или прячет окно;
+- дефолтный размер окна - `1280x800`, минимальный размер - `980x640`;
 - чтение и скролл работают без клавиаточного input mode;
 - клик в адресную строку или содержимое `WKWebView` переводит окно в input mode;
 - hover внутри `WKWebView` остается на default cursor, включая ссылки и текстовые поля;
+- страницы не должны издавать звук через обычные `audio`/`video` и Web Audio пути;
 - `Escape` выводит окно из input mode;
 - закрытие окна не завершает процесс.
 
@@ -124,14 +126,15 @@ swift run OverlayBrowser -- https://example.com
 - back, forward и reload работают;
 - `Option+Shift+S` прячет и возвращает окно;
 - при hover над ссылками и текстовыми полями внутри страницы системный курсор остается стрелкой;
+- invalid URL в адресной строке не издает системный beep;
 - закрытие окна не завершает процесс, повторный hotkey возвращает окно.
 
 ## Проверка window privacy
 
 Системный инвариант privacy-поведения: окно `Overlay Browser` должно иметь
-`CGWindowSharingState == 0`. Это проверяет настройку macOS window sharing/capture API. Сторонние
-игры, game capture pipeline и anti-cheat системы не являются универсально проверяемым контрактом
-этого проекта.
+`CGWindowSharingState == 0`. Это проверяет настройку macOS window sharing/capture API, которую
+обычно используют звонки и демонстрация экрана. Проект не скрывает процесс или окно от локальных
+приложений.
 
 ```bash
 cd /Users/igor/projects/safescreen

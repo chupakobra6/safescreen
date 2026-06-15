@@ -36,4 +36,27 @@ struct BrowserProfileTests {
         #expect(fixedCursorScript.source.contains("MutationObserver"))
         #expect(fixedCursorScript.source.contains("style.setProperty(\"cursor\", cursorValue, \"important\")"))
     }
+
+    @Test
+    func requiresUserActionForMediaPlayback() {
+        let configuration = BrowserProfile.makeWebViewConfiguration()
+
+        #expect(configuration.mediaTypesRequiringUserActionForPlayback == .all)
+    }
+
+    @Test
+    func injectsSilentMediaPolicyIntoAllFrames() throws {
+        let configuration = BrowserProfile.makeWebViewConfiguration()
+        let userScripts = configuration.userContentController.userScripts
+        let silentMediaScript = try #require(userScripts.first {
+            $0.source == BrowserProfile.silentMediaUserScriptSource
+        })
+
+        #expect(silentMediaScript.injectionTime == .atDocumentStart)
+        #expect(silentMediaScript.isForMainFrameOnly == false)
+        #expect(silentMediaScript.source.contains("HTMLMediaElement"))
+        #expect(silentMediaScript.source.contains("AudioContext"))
+        #expect(silentMediaScript.source.contains("node.volume = 0"))
+        #expect(silentMediaScript.source.contains("node.muted = true"))
+    }
 }

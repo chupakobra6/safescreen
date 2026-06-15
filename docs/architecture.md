@@ -24,11 +24,14 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - `NSPanel` с `.nonactivatingPanel`, `level = .floating`,
   `sharingType = .none`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`;
+- полупрозрачное окно по умолчанию с content size `1280x800` и минимальным размером `980x640`;
 - переключение видимости окна через Carbon hotkey `Option+Shift+S`;
 - отдельный input mode: окно принимает клавиатурный фокус только при взаимодействии с адресной
   строкой или содержимым страницы;
 - фиксированный default cursor внутри WebKit-страниц через `WKUserScript`, чтобы hover над ссылками
   и полями не переключал системный указатель на hand или I-beam;
+- silent media policy: запрет autoplay media playback через WebKit-конфигурацию, mute для
+  `audio`/`video`, Web Audio и отсутствие native beep при ошибке адреса;
 - стартовая HTML-страница при запуске без URL.
 
 Не реализовано:
@@ -91,11 +94,16 @@ WKWebView
 перезапусками приложения. Этот store хранит cookie, cache storage, local storage, IndexedDB и другие
 поддерживаемые типы website data.
 
-`WKUserContentController` добавляет cursor user script на `documentStart` во все frames. Скрипт
-фиксирует `cursor: default !important` для элементов страницы и псевдоэлементов, а также
-нормализует inline cursor на hover и новых DOM-узлах через `MutationObserver`. Это не отключает
-текстовый ввод: input mode по-прежнему передает клавиатурные события в `WKWebView`, но hover не
-должен менять системный указатель на I-beam или hand.
+`WKUserContentController` добавляет два user scripts на `documentStart` во все frames:
+
+- cursor policy фиксирует `cursor: default !important` для элементов страницы и псевдоэлементов, а
+  также нормализует inline cursor на hover и новых DOM-узлах через `MutationObserver`;
+- silent media policy глушит `audio`/`video`, переопределяет playback/resume hooks для media и Web
+  Audio и дополняет `mediaTypesRequiringUserActionForPlayback = .all`.
+
+Эти политики не отключают текстовый ввод: input mode по-прежнему передает клавиатурные события в
+`WKWebView`, но hover не должен менять системный указатель на I-beam или hand, а страницы не должны
+издавать звук через обычные WebKit media пути.
 
 ## Окно и input mode
 
@@ -103,9 +111,8 @@ WKWebView
 оставляет чтение и скролл отделенными от клавиаточного ввода.
 
 Окно выставляет `sharingType = .none`. Этот инвариант предназначен для macOS window sharing,
-screen capture и приложений, которые используют системные capture API. Поведение сторонних игр,
-оверлейных движков и античит-систем не является универсальным контрактом проекта; репозиторий не
-содержит обходов game capture или anti-cheat detection.
+screen capture и приложений, которые используют системные capture API, например звонков и
+демонстрации экрана. Проект не скрывает процесс или окно от локальных приложений.
 
 `BrowserViewController` переводит окно в input mode при явном намерении ввода:
 
@@ -118,7 +125,8 @@ screen capture и приложений, которые используют си
 
 Во время input mode окно получает key-фокус, потому macOS иначе не доставит текстовый ввод в
 `WKWebView`. При этом включение input mode использует `orderFrontRegardless()` и `makeKey()`, без
-активации приложения как обычного foreground-приложения.
+активации приложения как обычного foreground-приложения. Выход из input mode очищает first responder
+и вызывает `resignKey()`.
 
 ## DOM-Control Слой
 
@@ -133,8 +141,8 @@ screen capture и приложений, которые используют си
 - отсутствие сетевых запросов из control layer без отдельной явной настройки.
 
 Пока этот слой не реализован, документы и код не должны утверждать наличие DOM-control поведения.
-Фиксация cursor CSS считается базовой WebKit-политикой оболочки, а не расширенным DOM-control:
-она не вводит доменные правила, message bridge или пользовательское хранилище правил.
+Cursor и silent media scripts считаются базовыми WebKit-политиками оболочки, а не расширенным
+DOM-control: они не вводят доменные правила, message bridge или пользовательское хранилище правил.
 
 ## Технические ограничения
 
