@@ -50,9 +50,16 @@ let package = Package(
             name: "SafeScreenStage0Core",
             swiftSettings: swiftLanguageSettings
         ),
+        .target(
+            name: "SafeScreenStage0Browser",
+            swiftSettings: swiftLanguageSettings,
+            linkerSettings: [
+                .linkedFramework("WebKit")
+            ]
+        ),
         .executableTarget(
             name: "SafeScreenStage0",
-            dependencies: ["SafeScreenStage0Core"],
+            dependencies: ["SafeScreenStage0Core", "SafeScreenStage0Browser"],
             swiftSettings: swiftLanguageSettings,
             linkerSettings: [
                 .linkedFramework("AppKit"),
@@ -63,6 +70,12 @@ let package = Package(
         .testTarget(
             name: "SafeScreenStage0CoreTests",
             dependencies: ["SafeScreenStage0Core"],
+            swiftSettings: swiftLanguageSettings + testingSwiftSettings,
+            linkerSettings: testingLinkerSettings
+        ),
+        .testTarget(
+            name: "SafeScreenStage0BrowserTests",
+            dependencies: ["SafeScreenStage0Browser"],
             swiftSettings: swiftLanguageSettings + testingSwiftSettings,
             linkerSettings: testingLinkerSettings
         )

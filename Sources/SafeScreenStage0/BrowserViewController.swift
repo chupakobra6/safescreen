@@ -1,4 +1,5 @@
 import AppKit
+import SafeScreenStage0Browser
 import SafeScreenStage0Core
 import WebKit
 
@@ -43,9 +44,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     }()
 
     private lazy var webView: FocusAwareWebView = {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
-
+        let configuration = BrowserProfile.makeWebViewConfiguration()
         let view = FocusAwareWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = self
         view.allowsBackForwardNavigationGestures = true
