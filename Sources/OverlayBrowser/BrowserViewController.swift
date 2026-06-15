@@ -103,16 +103,28 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         updateNavigationState()
     }
 
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if let url = webView.url {
+            fputs("OverlayBrowser navigation started: \(url.absoluteString)\n", stderr)
+        }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if let url = webView.url {
+            fputs("OverlayBrowser navigation finished: \(url.absoluteString)\n", stderr)
+        }
         updateAddressFromWebView()
         updateNavigationState()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        writeNavigationError(error)
         updateNavigationState()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        writeNavigationError(error)
+        loadErrorPage(for: error)
         updateNavigationState()
     }
 
@@ -210,6 +222,64 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     private func load(url: URL) {
         webView.load(URLRequest(url: url))
         addressField.stringValue = url.absoluteString
+    }
+
+    private func loadErrorPage(for error: Error) {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            return
+        }
+
+        let message = escapeHTML(error.localizedDescription)
+        let html = """
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              margin: 0;
+              padding: 32px;
+              font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              color: #17202a;
+              background: #ffffff;
+            }
+            h1 {
+              margin: 0 0 12px;
+              font-size: 18px;
+            }
+            p {
+              margin: 0;
+              line-height: 1.5;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Page failed to load</h1>
+          <p>\(message)</p>
+        </body>
+        </html>
+        """
+
+        webView.loadHTMLString(html, baseURL: nil)
+    }
+
+    private func writeNavigationError(_ error: Error) {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            return
+        }
+
+        fputs("OverlayBrowser navigation failed: \(error.localizedDescription)\n", stderr)
+    }
+
+    private func escapeHTML(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 
     private func updateNavigationState() {

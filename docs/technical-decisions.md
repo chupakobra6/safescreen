@@ -21,6 +21,9 @@
   размер не задается.
 - Input mode может делать окно key window для доставки текста в `WKWebView`, но не должен
   активировать приложение как обычное foreground-окно.
+- Клик вне `BrowserPanel` скрывает окно через AppKit global mouse monitor и сбрасывает input mode.
+- Ошибки provisional navigation должны логироваться и отображаться в окне, а не оставлять пустой
+  экран.
 - Глобальная горячая клавиша реализована через Carbon hotkey, чтобы не добавлять отдельную
   зависимость только ради переключения видимости.
 - Companion extension `OverlayFocusGuard` реализован как локальное Chrome/Chromium MV3-расширение,

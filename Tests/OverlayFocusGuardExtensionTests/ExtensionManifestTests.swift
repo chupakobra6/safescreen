@@ -65,6 +65,7 @@ struct ExtensionManifestTests {
         #expect(source.contains("Enable for this site"))
         #expect(source.contains("Disable for this site"))
         #expect(source.contains("chrome.storage.local.set"))
+        #expect(source.contains("document.readyState === \"loading\""))
     }
 
     @Test

@@ -39,6 +39,7 @@ swift run OverlayBrowser
 - без URL открывается встроенная стартовая страница;
 - URL без схемы нормализуется в `https://...`;
 - `Option+Shift+S` показывает или прячет окно;
+- клик вне окна скрывает окно;
 - дефолтный размер окна - `1280x800`, без большого app-enforced минимального размера;
 - чтение и скролл работают без клавиаточного input mode;
 - клик в адресную строку или содержимое `WKWebView` переводит окно в input mode;
@@ -171,8 +172,11 @@ swift run OverlayBrowser -- https://example.com
 - адресная строка загружает `https://...`;
 - back, forward и reload работают;
 - `Option+Shift+S` прячет и возвращает окно;
+- клик по другому приложению скрывает окно и не меняет `sharingType = .none`;
 - при hover над ссылками и текстовыми полями внутри страницы системный курсор остается стрелкой;
 - invalid URL в адресной строке не издает системный beep;
+- при ошибке загрузки вместо пустого окна показывается простая HTML-страница ошибки, а причина
+  пишется в stderr;
 - закрытие окна не завершает процесс, повторный hotkey возвращает окно.
 
 ## Проверка window privacy
@@ -180,13 +184,15 @@ swift run OverlayBrowser -- https://example.com
 Системный инвариант privacy-поведения: окно `Overlay Browser` должно иметь
 `CGWindowSharingState == 0`. Это проверяет настройку macOS window sharing/capture API, которую
 обычно используют звонки и демонстрация экрана. Проект не скрывает процесс или окно от локальных
-приложений.
+приложений. Во время этой проверки не кликать вне окна до readback: внешний клик теперь скрывает
+окно.
 
 ```bash
 cd /Users/igor/projects/safescreen
-swift run OverlayBrowser -- https://example.com >/tmp/overlay-browser-privacy.log 2>&1 &
+swift build
+.build/debug/OverlayBrowser https://example.com >/tmp/overlay-browser-privacy.log 2>&1 &
 pid=$!
-sleep 4
+sleep 0.5
 swift -e 'import CoreGraphics; let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]; let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []; let matches = windows.filter { ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser" }; guard let window = matches.first else { print("windowFound=false"); exit(1) }; print("windowFound=true"); print("sharingState=\(window[kCGWindowSharingState as String] ?? "missing")")'
 kill "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
@@ -198,6 +204,13 @@ wait "$pid" 2>/dev/null || true
 windowFound=true
 sharingState=0
 ```
+
+Проверка auto-hide:
+
+- запустить `OverlayBrowser`;
+- кликнуть в другое приложение или по рабочему столу;
+- окно должно скрыться;
+- в stderr должна появиться строка `OverlayBrowser hidden by outside mouse down`.
 
 ## Проверка персистентности профиля
 

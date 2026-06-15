@@ -98,6 +98,10 @@ toggleButton.addEventListener("click", async () => {
   await loadState();
 });
 
-document.addEventListener("DOMContentLoaded", () => {
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    loadState();
+  });
+} else {
   loadState();
-});
+}
