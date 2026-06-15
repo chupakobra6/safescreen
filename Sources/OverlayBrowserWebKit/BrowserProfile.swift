@@ -9,8 +9,6 @@ public enum BrowserProfile {
     public static let fixedCursorUserScriptSource = """
     (() => {
         const styleID = "overlay-browser-fixed-cursor-style";
-        const cursorValue = "default";
-        let isWatchingCursor = false;
         const css = `
             *, *::before, *::after {
                 cursor: default !important;
@@ -32,77 +30,11 @@ public enum BrowserProfile {
             }
         }
 
-        function applyInlineCursor(node) {
-            if (!(node instanceof Element)) {
-                return;
-            }
-
-            if (
-                node.style.getPropertyValue("cursor") === cursorValue &&
-                node.style.getPropertyPriority("cursor") === "important"
-            ) {
-                return;
-            }
-
-            node.style.setProperty("cursor", cursorValue, "important");
-        }
-
-        function applySubtreeCursor(root) {
-            if (!(root instanceof Element)) {
-                return;
-            }
-
-            applyInlineCursor(root);
-            root.querySelectorAll("*").forEach(applyInlineCursor);
-        }
-
-        function watchCursorChanges() {
-            if (isWatchingCursor) {
-                return;
-            }
-
-            if (!document.documentElement) {
-                return;
-            }
-
-            const observer = new MutationObserver((mutations) => {
-                for (const mutation of mutations) {
-                    if (mutation.type === "attributes") {
-                        applyInlineCursor(mutation.target);
-                    }
-
-                    for (const node of mutation.addedNodes) {
-                        applySubtreeCursor(node);
-                    }
-                }
-            });
-
-            observer.observe(document.documentElement, {
-                attributes: true,
-                attributeFilter: ["class", "style"],
-                childList: true,
-                subtree: true
-            });
-            isWatchingCursor = true;
-        }
-
-        document.addEventListener("mouseover", (event) => {
-            applyInlineCursor(event.target);
-        }, true);
-
-        document.addEventListener("mousemove", (event) => {
-            applyInlineCursor(event.target);
-        }, true);
-
         installFixedCursorStyle();
-        applySubtreeCursor(document.documentElement);
-        watchCursorChanges();
 
         if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", () => {
                 installFixedCursorStyle();
-                applySubtreeCursor(document.documentElement);
-                watchCursorChanges();
             }, { once: true });
         }
     })();
@@ -161,40 +93,6 @@ public enum BrowserProfile {
             HTMLMediaElement.prototype.play = silentPlay;
         }
 
-        function patchAudioContext(name) {
-            const NativeAudioContext = window[name];
-            if (typeof NativeAudioContext !== "function" || NativeAudioContext.__overlayBrowserSilent) {
-                return;
-            }
-
-            const nativeResume = NativeAudioContext.prototype.resume;
-            if (typeof nativeResume === "function" && !nativeResume.__overlayBrowserSilent) {
-                const silentResume = function() {
-                    if (typeof this.suspend === "function") {
-                        return this.suspend().catch(() => {});
-                    }
-
-                    return Promise.resolve();
-                };
-
-                Object.defineProperty(silentResume, "__overlayBrowserSilent", { value: true });
-                NativeAudioContext.prototype.resume = silentResume;
-            }
-
-            const SilentAudioContext = function(...args) {
-                const context = new NativeAudioContext(...args);
-                if (typeof context.suspend === "function") {
-                    context.suspend().catch(() => {});
-                }
-                return context;
-            };
-
-            SilentAudioContext.prototype = NativeAudioContext.prototype;
-            Object.setPrototypeOf(SilentAudioContext, NativeAudioContext);
-            Object.defineProperty(SilentAudioContext, "__overlayBrowserSilent", { value: true });
-            window[name] = SilentAudioContext;
-        }
-
         function watchMediaChanges() {
             if (isWatchingMedia || !document.documentElement) {
                 return;
@@ -230,16 +128,12 @@ public enum BrowserProfile {
         }, true);
 
         patchMediaPlayback();
-        patchAudioContext("AudioContext");
-        patchAudioContext("webkitAudioContext");
         muteSubtree(document.documentElement);
         watchMediaChanges();
 
         if (document.readyState === "loading") {
             document.addEventListener("DOMContentLoaded", () => {
                 patchMediaPlayback();
-                patchAudioContext("AudioContext");
-                patchAudioContext("webkitAudioContext");
                 muteSubtree(document.documentElement);
                 watchMediaChanges();
             }, { once: true });

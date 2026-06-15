@@ -306,6 +306,10 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
 private final class AddressTextField: NSTextField {
     var onInteraction: (() -> Void)?
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .arrow)
     }
@@ -324,6 +328,10 @@ private final class AddressTextField: NSTextField {
 
 private final class FocusAwareWebView: WKWebView {
     var onInputIntent: (() -> Void)?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .arrow)

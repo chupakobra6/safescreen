@@ -37,7 +37,7 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - фиксированный default cursor внутри WebKit-страниц через `WKUserScript`, чтобы hover над ссылками
   и полями не переключал системный указатель на hand или I-beam;
 - silent media policy: запрет autoplay media playback через WebKit-конфигурацию, mute для
-  `audio`/`video`, Web Audio и отсутствие native beep при ошибке адреса;
+  `audio`/`video` и отсутствие native beep при ошибке адреса;
 - локальное MV3-расширение `OverlayFocusGuard` с ручным per-origin toggle для основного браузера;
 - стартовая HTML-страница при запуске без URL.
 
@@ -107,13 +107,13 @@ WKWebView
 `WKUserContentController` добавляет два user scripts на `documentStart` во все frames:
 
 - cursor policy фиксирует `cursor: default !important` для элементов страницы и псевдоэлементов, а
-  также нормализует inline cursor на hover и новых DOM-узлах через `MutationObserver`;
+  также не пишет inline styles в DOM, чтобы не ломать тяжелые React-приложения;
 - silent media policy глушит `audio`/`video`, переопределяет playback/resume hooks для media и Web
-  Audio и дополняет `mediaTypesRequiringUserActionForPlayback = .all`.
+  дополняет `mediaTypesRequiringUserActionForPlayback = .all`.
 
 Эти политики не отключают текстовый ввод: input mode по-прежнему передает клавиатурные события в
 `WKWebView`, но hover не должен менять системный указатель на I-beam или hand, а страницы не должны
-издавать звук через обычные WebKit media пути.
+издавать звук через обычные `audio`/`video` media пути.
 
 ## Окно и input mode
 

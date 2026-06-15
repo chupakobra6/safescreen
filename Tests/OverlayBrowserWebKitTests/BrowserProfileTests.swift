@@ -33,8 +33,8 @@ struct BrowserProfileTests {
         #expect(fixedCursorScript.injectionTime == .atDocumentStart)
         #expect(fixedCursorScript.isForMainFrameOnly == false)
         #expect(fixedCursorScript.source.contains("cursor: default !important"))
-        #expect(fixedCursorScript.source.contains("MutationObserver"))
-        #expect(fixedCursorScript.source.contains("style.setProperty(\"cursor\", cursorValue, \"important\")"))
+        #expect(!fixedCursorScript.source.contains("style.setProperty(\"cursor\""))
+        #expect(!fixedCursorScript.source.contains("mousemove"))
     }
 
     @Test
@@ -55,8 +55,8 @@ struct BrowserProfileTests {
         #expect(silentMediaScript.injectionTime == .atDocumentStart)
         #expect(silentMediaScript.isForMainFrameOnly == false)
         #expect(silentMediaScript.source.contains("HTMLMediaElement"))
-        #expect(silentMediaScript.source.contains("AudioContext"))
         #expect(silentMediaScript.source.contains("node.volume = 0"))
         #expect(silentMediaScript.source.contains("node.muted = true"))
+        #expect(!silentMediaScript.source.contains("AudioContext"))
     }
 }

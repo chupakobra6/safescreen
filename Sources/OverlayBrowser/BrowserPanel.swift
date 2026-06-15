@@ -3,8 +3,6 @@ import AppKit
 final class BrowserPanel: NSPanel {
     private static let defaultContentSize = NSSize(width: 1280, height: 800)
 
-    private var acceptsKeyboardFocus = false
-
     init() {
         let contentRect = NSRect(origin: .zero, size: Self.defaultContentSize)
         let styleMask: NSWindow.StyleMask = [
@@ -37,7 +35,7 @@ final class BrowserPanel: NSPanel {
     }
 
     override var canBecomeKey: Bool {
-        acceptsKeyboardFocus
+        true
     }
 
     override var canBecomeMain: Bool {
@@ -49,8 +47,6 @@ final class BrowserPanel: NSPanel {
     }
 
     func setInputMode(_ enabled: Bool) {
-        acceptsKeyboardFocus = enabled
-
         if enabled {
             orderFrontRegardless()
             makeKey()
