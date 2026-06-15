@@ -1,6 +1,6 @@
 import Testing
 import WebKit
-@testable import SafeScreenStage0Browser
+@testable import OverlayBrowserWebKit
 
 @MainActor
 @Suite("BrowserProfile")

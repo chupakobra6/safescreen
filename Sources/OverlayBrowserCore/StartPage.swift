@@ -5,7 +5,7 @@ public enum StartPage {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>SafeScreen Stage 0</title>
+      <title>Overlay Browser</title>
       <style>
         :root {
           color-scheme: light dark;
@@ -38,8 +38,8 @@ public enum StartPage {
     </head>
     <body>
       <main>
-        <h1>SafeScreen Stage 0</h1>
-        <p>Enter a URL above or launch with: swift run SafeScreenStage0 -- https://example.com</p>
+        <h1>Overlay Browser</h1>
+        <p>Enter a URL above or launch with: swift run OverlayBrowser -- https://example.com</p>
       </main>
     </body>
     </html>

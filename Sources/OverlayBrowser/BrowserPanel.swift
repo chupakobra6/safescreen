@@ -20,13 +20,13 @@ final class BrowserPanel: NSPanel {
             defer: false
         )
 
-        title = "SafeScreen Stage 0"
+        title = "Overlay Browser"
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
         level = .floating
         sharingType = .none
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        setFrameAutosaveName("SafeScreenStage0.BrowserPanel")
+        setFrameAutosaveName("OverlayBrowser.BrowserPanel")
     }
 
     override var canBecomeKey: Bool {

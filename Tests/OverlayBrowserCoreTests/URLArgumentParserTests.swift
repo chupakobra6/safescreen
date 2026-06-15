@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import SafeScreenStage0Core
+@testable import OverlayBrowserCore
 
 @Suite("URLArgumentParser")
 struct URLArgumentParserTests {
@@ -33,7 +33,7 @@ struct URLArgumentParserTests {
     @Test
     func destinationUsesFirstMeaningfulURLArgument() {
         let destination = URLArgumentParser.destination(
-            from: ["SafeScreenStage0", "--ignored", "example.com"]
+            from: ["OverlayBrowser", "--ignored", "example.com"]
         )
 
         #expect(destination == .url(URL(string: "https://example.com")!))
@@ -41,12 +41,12 @@ struct URLArgumentParserTests {
 
     @Test
     func destinationFallsBackToStartPageWithoutURL() {
-        #expect(URLArgumentParser.destination(from: ["SafeScreenStage0"]) == .fallbackStartPage)
+        #expect(URLArgumentParser.destination(from: ["OverlayBrowser"]) == .fallbackStartPage)
     }
 
     @Test
     func fallbackStartPageContainsLaunchCommand() {
-        #expect(StartPage.html.contains("SafeScreen Stage 0"))
-        #expect(StartPage.html.contains("swift run SafeScreenStage0"))
+        #expect(StartPage.html.contains("Overlay Browser"))
+        #expect(StartPage.html.contains("swift run OverlayBrowser"))
     }
 }

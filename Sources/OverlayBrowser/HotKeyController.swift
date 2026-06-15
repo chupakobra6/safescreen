@@ -95,7 +95,7 @@ final class HotKeyController {
     }
 
     private func writeHotKeyError(_ operation: String, status: OSStatus) {
-        fputs("SafeScreenStage0 hotkey error: \(operation) failed with status \(status)\n", stderr)
+        fputs("OverlayBrowser hotkey error: \(operation) failed with status \(status)\n", stderr)
     }
 }
 

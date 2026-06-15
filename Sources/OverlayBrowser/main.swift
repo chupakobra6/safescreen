@@ -1,7 +1,7 @@
 import AppKit
 
 let app = NSApplication.shared
-let delegate = SafeScreenAppDelegate(arguments: CommandLine.arguments)
+let delegate = OverlayBrowserAppDelegate(arguments: CommandLine.arguments)
 
 app.delegate = delegate
 app.setActivationPolicy(.accessory)

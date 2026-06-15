@@ -1,8 +1,8 @@
 import AppKit
 import Carbon
-import SafeScreenStage0Core
+import OverlayBrowserCore
 
-final class SafeScreenAppDelegate: NSObject, NSApplicationDelegate {
+final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     private let arguments: [String]
     private var browserPanel: BrowserPanel?
     private var browserViewController: BrowserViewController?

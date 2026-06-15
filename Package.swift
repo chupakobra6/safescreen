@@ -31,35 +31,35 @@ let swiftLanguageSettings: [SwiftSetting] = [
 ]
 
 let package = Package(
-    name: "SafeScreen",
+    name: "OverlayBrowser",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .executable(
-            name: "SafeScreenStage0",
-            targets: ["SafeScreenStage0"]
+            name: "OverlayBrowser",
+            targets: ["OverlayBrowser"]
         ),
         .library(
-            name: "SafeScreenStage0Core",
-            targets: ["SafeScreenStage0Core"]
+            name: "OverlayBrowserCore",
+            targets: ["OverlayBrowserCore"]
         )
     ],
     targets: [
         .target(
-            name: "SafeScreenStage0Core",
+            name: "OverlayBrowserCore",
             swiftSettings: swiftLanguageSettings
         ),
         .target(
-            name: "SafeScreenStage0Browser",
+            name: "OverlayBrowserWebKit",
             swiftSettings: swiftLanguageSettings,
             linkerSettings: [
                 .linkedFramework("WebKit")
             ]
         ),
         .executableTarget(
-            name: "SafeScreenStage0",
-            dependencies: ["SafeScreenStage0Core", "SafeScreenStage0Browser"],
+            name: "OverlayBrowser",
+            dependencies: ["OverlayBrowserCore", "OverlayBrowserWebKit"],
             swiftSettings: swiftLanguageSettings,
             linkerSettings: [
                 .linkedFramework("AppKit"),
@@ -68,14 +68,14 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "SafeScreenStage0CoreTests",
-            dependencies: ["SafeScreenStage0Core"],
+            name: "OverlayBrowserCoreTests",
+            dependencies: ["OverlayBrowserCore"],
             swiftSettings: swiftLanguageSettings + testingSwiftSettings,
             linkerSettings: testingLinkerSettings
         ),
         .testTarget(
-            name: "SafeScreenStage0BrowserTests",
-            dependencies: ["SafeScreenStage0Browser"],
+            name: "OverlayBrowserWebKitTests",
+            dependencies: ["OverlayBrowserWebKit"],
             swiftSettings: swiftLanguageSettings + testingSwiftSettings,
             linkerSettings: testingLinkerSettings
         )

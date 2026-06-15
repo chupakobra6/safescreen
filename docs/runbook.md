@@ -1,14 +1,14 @@
-# Ранбук SafeScreen
+# Ранбук Overlay Browser
 
-Назначение: хранить команды запуска, сборки, проверки и ручные сценарии для текущего прототипа
-SafeScreen.
+Назначение: хранить команды запуска, сборки, проверки и ручные сценарии для текущего приложения
+Overlay Browser.
 
 ## Среда
 
 - Рабочая директория: `/Users/igor/projects/safescreen`.
-- Текущий кодовый путь: SwiftPM через Command Line Tools, без обязательного Xcode GUI.
+- Кодовый путь: SwiftPM через Command Line Tools, без обязательного Xcode GUI.
 - Минимальная платформа пакета: macOS 14.
-- Основной executable product: `SafeScreenStage0`.
+- Основной executable product: `OverlayBrowser`.
 
 Проверить окружение:
 
@@ -18,20 +18,20 @@ swift --version
 xcode-select -p
 ```
 
-## Запуск Stage 0
+## Запуск
 
 Запустить с URL:
 
 ```bash
 cd /Users/igor/projects/safescreen
-swift run SafeScreenStage0 -- https://example.com
+swift run OverlayBrowser -- https://example.com
 ```
 
 Запустить без URL:
 
 ```bash
 cd /Users/igor/projects/safescreen
-swift run SafeScreenStage0
+swift run OverlayBrowser
 ```
 
 Поведение:
@@ -39,9 +39,10 @@ swift run SafeScreenStage0
 - без URL открывается встроенная стартовая страница;
 - URL без схемы нормализуется в `https://...`;
 - `Option+Shift+S` показывает или прячет окно;
-- окно Stage 0 не должно появляться в Dock;
-- чтение и скролл рассчитаны на passive mode без захвата фокуса, ввод текста может перевести окно в
-  input mode.
+- чтение и скролл работают без клавиаточного input mode;
+- клик в адресную строку или содержимое `WKWebView` переводит окно в input mode;
+- `Escape` выводит окно из input mode;
+- закрытие окна не завершает процесс.
 
 ## Сборка и тесты
 
@@ -70,18 +71,18 @@ git diff --check
 
 ```bash
 cd /Users/igor/projects/safescreen
-find . -maxdepth 3 -type f | sort
+find . -maxdepth 3 \( -path ./.git -o -path ./.build -o -name .DS_Store \) -prune -o -type f -print | sort
 ```
 
 ## Smoke-запуск без зависания терминала
 
-Команда собирает и запускает `SafeScreenStage0`, ждет несколько секунд, затем останавливает процесс.
-Она нужна только как быстрый sanity-check старта GUI из агента.
+Команда собирает и запускает `OverlayBrowser`, ждет несколько секунд, затем останавливает процесс.
+Она нужна как быстрый sanity-check старта GUI из агента.
 
 ```bash
 cd /Users/igor/projects/safescreen
-logfile=$(mktemp /tmp/safescreen-stage0-smoke.XXXXXX)
-swift run SafeScreenStage0 -- https://example.com >"$logfile" 2>&1 &
+logfile=$(mktemp /tmp/overlay-browser-smoke.XXXXXX)
+swift run OverlayBrowser -- https://example.com >"$logfile" 2>&1 &
 pid=$!
 sleep 4
 if kill -0 "$pid" 2>/dev/null; then
@@ -103,7 +104,7 @@ exit "$exit_code"
 Проверить, что после smoke не остался процесс:
 
 ```bash
-pgrep -fl SafeScreenStage0 || true
+pgrep -fl OverlayBrowser || true
 ```
 
 ## Ручная проверка UI
@@ -112,7 +113,7 @@ pgrep -fl SafeScreenStage0 || true
 
 ```bash
 cd /Users/igor/projects/safescreen
-swift run SafeScreenStage0 -- https://example.com
+swift run OverlayBrowser -- https://example.com
 ```
 
 Проверить:
@@ -121,48 +122,30 @@ swift run SafeScreenStage0 -- https://example.com
 - адресная строка загружает `https://...`;
 - back, forward и reload работают;
 - `Option+Shift+S` прячет и возвращает окно;
-- Dock-иконка Stage 0 не появляется;
 - закрытие окна не завершает процесс, повторный hotkey возвращает окно.
 
-## Проверка фокуса
-
-Цель: убедиться, что passive read/scroll не вызывает `blur` у страницы в основном браузере.
+## Проверка персистентности профиля
 
 Сценарий:
 
-- открыть в основном браузере тестовую страницу с логом `focus`, `blur` и `visibilitychange`;
-- активировать основной браузер;
-- открыть `SafeScreenStage0`;
-- читать и скроллить страницу внутри `SafeScreenStage0`;
-- проверить, что основной браузер не получил `blur`;
-- отдельно кликнуть в адресную строку или поле ввода внутри `SafeScreenStage0` и зафиксировать, что
-  ввод может вызвать `blur`.
+- запустить `OverlayBrowser` с тестовым сайтом, который устанавливает cookie или localStorage;
+- выполнить действие, которое сохраняет состояние в сайте;
+- закрыть процесс приложения;
+- запустить `OverlayBrowser` повторно с тем же URL;
+- проверить, что сайт видит сохраненное состояние без повторной настройки.
 
-## Проверка screen-share
+Быстрая проверка WebKit API:
 
-Google Meet Web или Telemost:
+```bash
+swift -e 'import Foundation; import WebKit; let id = UUID(uuidString: "4B801A03-C12C-4C5C-89CE-28D85E385B77")!; let store = WKWebsiteDataStore(forIdentifier: id); print("persistent=\(store.isPersistent)"); print("identifierMatches=\(store.identifier == id)")'
+```
 
-- открыть сервис в основном браузере;
-- запустить `SafeScreenStage0`;
-- включить демонстрацию полного экрана или окна из сервиса;
-- проверить на стороне зрителя или preview, что окно `SafeScreenStage0` не попадает в шаринг.
+Ожидаемый результат:
 
-Zoom Web:
-
-- открыть Zoom Web в основном браузере;
-- повторить тот же сценарий screen-share;
-- не использовать десктопный Zoom как целевой тест для `NSWindow.sharingType = .none`.
-
-Браузерный прокторинг:
-
-- открыть прокторинг в основном браузере;
-- запустить `SafeScreenStage0`;
-- читать и скроллить внутри `SafeScreenStage0`;
-- проверить, что окно `SafeScreenStage0` не видно и прокторинг не показывает уведомление о
-  переключении фокуса на стороннее приложение.
-
-Если целевой браузерный сценарий показывает окно Stage 0 несмотря на `sharingType = .none`, этап 0
-считается неподтвержденным и приоритет возвращается к SafeScreen Display.
+```text
+persistent=true
+identifierMatches=true
+```
 
 ## Рабочее дерево и коммит
 

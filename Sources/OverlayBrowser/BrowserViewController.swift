@@ -1,6 +1,6 @@
 import AppKit
-import SafeScreenStage0Browser
-import SafeScreenStage0Core
+import OverlayBrowserCore
+import OverlayBrowserWebKit
 import WebKit
 
 final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavigationDelegate {
