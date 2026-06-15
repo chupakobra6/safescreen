@@ -16,6 +16,10 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 браузерные данные в постоянном WebKit-профиле и предоставляет управляемую оболочку окна поверх
 обычных desktop-приложений.
 
+В репозитории также есть companion extension `OverlayFocusGuard` для основного Chrome/Chromium
+браузера. Оно не является частью overlay window: расширение нужно для сайтов, которые должны
+оставаться в состоянии focused/visible при работе рядом с overlay browser.
+
 Реализовано:
 
 - executable product `OverlayBrowser`;
@@ -33,6 +37,7 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
   и полями не переключал системный указатель на hand или I-beam;
 - silent media policy: запрет autoplay media playback через WebKit-конфигурацию, mute для
   `audio`/`video`, Web Audio и отсутствие native beep при ошибке адреса;
+- локальное MV3-расширение `OverlayFocusGuard` с ручным per-origin toggle для основного браузера;
 - стартовая HTML-страница при запуске без URL.
 
 Не реализовано:
@@ -41,6 +46,7 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - профильная UI-настройка политик для доменов;
 - хранилище пользовательских правил DOM-control;
 - сборка `.app`, подпись и дистрибуция вне SwiftPM.
+- публикация `OverlayFocusGuard` в Chrome Web Store.
 
 ## Модули
 
@@ -49,8 +55,10 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 | `OverlayBrowser` | AppKit shell: lifecycle, окно, hotkey, адресная строка, навигация `WKWebView`. |
 | `OverlayBrowserCore` | Тестируемая логика без AppKit/WebKit shell: стартовая страница, парсинг URL, стартовый destination. |
 | `OverlayBrowserWebKit` | Конфигурация WebKit-профиля и фабрика `WKWebViewConfiguration`. |
+| `Extensions/OverlayFocusGuard` | Локальное Chrome/Chromium MV3-расширение для per-origin focus/visibility guard в основном браузере. |
 | `OverlayBrowserCoreTests` | Тесты URL-нормализации и стартовой страницы. |
 | `OverlayBrowserWebKitTests` | Тесты persistent `WKWebsiteDataStore` и стабильного идентификатора профиля. |
+| `OverlayFocusGuardExtensionTests` | Тесты manifest и ключевых инвариантов browser extension. |
 
 ## Runtime-поток
 
@@ -144,6 +152,35 @@ screen capture и приложений, которые используют си
 Пока этот слой не реализован, документы и код не должны утверждать наличие DOM-control поведения.
 Cursor и silent media scripts считаются базовыми WebKit-политиками оболочки, а не расширенным
 DOM-control: они не вводят доменные правила, message bridge или пользовательское хранилище правил.
+
+## OverlayFocusGuard Extension
+
+`Extensions/OverlayFocusGuard` - локальное unpacked MV3-расширение для основного браузера. Оно
+предназначено для ручного включения на конкретном `http`/`https` origin через popup расширения.
+
+Состав:
+
+- `manifest.json` - MV3 manifest, popup, service worker и два content scripts;
+- `page-guard.js` - MAIN-world script на `document_start`, который может подменять
+  `document.hidden`, `document.visibilityState`, `document.hasFocus()` и блокировать blur/hidden
+  events;
+- `content.js` - isolated content script, который читает `chrome.storage.local.enabledOrigins` и
+  передает toggle в MAIN-world script;
+- `popup.html`, `popup.css`, `popup.js` - один ручной переключатель для текущего origin;
+- `background.js` - service worker, который показывает badge `ON` на иконке для включенного origin.
+
+По умолчанию расширение ничего не включает для случайных сайтов. `page-guard.js` загружается в MAIN
+world без публичного `window.__...` API; focus/visibility patch устанавливается только после
+enabled-сигнала для текущего origin. При выключении расширение восстанавливает сохраненные
+descriptors и удаляет свои event blockers.
+
+Граница поведения:
+
+- поддерживаются только `http` и `https` origins;
+- `chrome://`, `file://`, extension pages и opaque origins не переключаются;
+- переключатель хранится по exact origin, например `https://example.com`;
+- для сайтов, которые проверяют visibility/focus очень рано при загрузке, после первого включения
+  origin стоит перезагрузить вкладку, чтобы guard был применен с `document_start`.
 
 ## Технические ограничения
 

@@ -63,6 +63,18 @@ cd /Users/igor/projects/safescreen
 swift test
 ```
 
+Проверить browser extension:
+
+```bash
+cd /Users/igor/projects/safescreen
+node --check Extensions/OverlayFocusGuard/page-guard.js
+node --check Extensions/OverlayFocusGuard/content.js
+node --check Extensions/OverlayFocusGuard/popup.js
+node --check Extensions/OverlayFocusGuard/background.js
+node -e 'JSON.parse(require("fs").readFileSync("Extensions/OverlayFocusGuard/manifest.json", "utf8")); console.log("manifest ok")'
+swift test --filter OverlayFocusGuardExtensionTests
+```
+
 Проверить стиль diff перед коммитом:
 
 ```bash
@@ -109,6 +121,40 @@ exit "$exit_code"
 ```bash
 pgrep -fl OverlayBrowser || true
 ```
+
+## OverlayFocusGuard в основном браузере
+
+Назначение: локальное Chrome/Chromium MV3-расширение для сайтов, которым нужно оставаться
+`focused`/`visible` во время работы рядом с overlay browser.
+
+Установка:
+
+1. Открыть `chrome://extensions`.
+2. Включить Developer mode.
+3. Нажать Load unpacked.
+4. Выбрать папку `/Users/igor/projects/safescreen/Extensions/OverlayFocusGuard`.
+
+Использование:
+
+1. Открыть нужный сайт в основном браузере.
+2. Нажать иконку `Overlay Focus Guard`.
+3. Нажать `Enable for this site`.
+4. Проверить badge `ON` на иконке расширения.
+5. Если сайт уже был открыт и проверяет focus/visibility при первом скрипте загрузки, один раз
+   перезагрузить вкладку после включения origin.
+
+Выключение:
+
+- нажать иконку расширения на том же origin;
+- нажать `Disable for this site`;
+- badge `ON` должен исчезнуть.
+
+Границы:
+
+- переключатель применяется только к current `http`/`https` origin;
+- случайные сайты не получают enabled-состояние;
+- `chrome://`, `file://` и extension pages не поддерживаются;
+- расширение не публикуется в Chrome Web Store и устанавливается как локальное unpacked extension.
 
 ## Ручная проверка UI
 

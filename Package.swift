@@ -78,6 +78,11 @@ let package = Package(
             dependencies: ["OverlayBrowserWebKit"],
             swiftSettings: swiftLanguageSettings + testingSwiftSettings,
             linkerSettings: testingLinkerSettings
+        ),
+        .testTarget(
+            name: "OverlayFocusGuardExtensionTests",
+            swiftSettings: swiftLanguageSettings + testingSwiftSettings,
+            linkerSettings: testingLinkerSettings
         )
     ]
 )

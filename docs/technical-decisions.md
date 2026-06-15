@@ -22,6 +22,12 @@
   активировать приложение как обычное foreground-окно.
 - Глобальная горячая клавиша реализована через Carbon hotkey, чтобы не добавлять отдельную
   зависимость только ради переключения видимости.
+- Companion extension `OverlayFocusGuard` реализован как локальное Chrome/Chromium MV3-расширение,
+  а не как стороннее расширение из магазина.
+- `OverlayFocusGuard` хранит состояние только в `chrome.storage.local.enabledOrigins` и включает
+  focus/visibility guard вручную для exact `http`/`https` origin.
+- MAIN-world script расширения загружается на `document_start`, но patch descriptors/events
+  устанавливаются только когда текущий origin включен.
 - Расширенный DOM-control должен строиться внутри WebKit shell через `WKUserScript`,
   `WKScriptMessageHandler` и доменно-ограниченные policies.
 - Проект проверяет системные macOS-инварианты capture/focus для звонков и демонстрации экрана, но
@@ -46,6 +52,8 @@
 - После изменения GUI shell должен проходить smoke-запуск `swift run OverlayBrowser -- https://example.com`.
 - После изменения WebKit profile тесты должны проверять `WKWebsiteDataStore.isPersistent` и
   стабильный `identifier`, а также наличие fixed cursor и silent media user scripts.
+- После изменения `OverlayFocusGuard` должны проходить JS syntax checks, manifest JSON parse и
+  `OverlayFocusGuardExtensionTests`.
 - После изменения window privacy должен проходить runtime readback `CGWindowSharingState == 0` для
   окна процесса `OverlayBrowser`.
 - После документационной чистки `rg` по активным Markdown-документам не должен находить старые
