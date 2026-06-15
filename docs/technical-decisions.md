@@ -10,12 +10,18 @@
 - UI реализуется на AppKit без Xcode project в репозитории.
 - Встроенный браузер работает на `WKWebView`.
 - Данные сайтов хранятся в persistent `WKWebsiteDataStore` со стабильным UUID профиля.
+- WebKit-конфигурация добавляет global user script для `cursor: default !important` во всех frames.
 - URL parser принимает только `http` и `https`; URL без схемы получает `https://`.
-- Окно приложения реализовано как `NSPanel` с управляемым input mode.
+- Окно приложения реализовано как `NSPanel` с `sharingType = .none`, `.nonactivatingPanel` и
+  управляемым input mode.
+- Input mode может делать окно key window для доставки текста в `WKWebView`, но не должен
+  активировать приложение как обычное foreground-окно.
 - Глобальная горячая клавиша реализована через Carbon hotkey, чтобы не добавлять отдельную
   зависимость только ради переключения видимости.
 - Расширенный DOM-control должен строиться внутри WebKit shell через `WKUserScript`,
   `WKScriptMessageHandler` и доменно-ограниченные policies.
+- Проект проверяет системные macOS-инварианты capture/focus, но не реализует обходы game capture
+  или anti-cheat detection.
 - Chromium/CEF/Electron/Tauri не являются текущим базовым путем; рассматривать их только при
   подтвержденной технической необходимости Chrome runtime.
 
@@ -35,6 +41,8 @@
 - После изменения target names или module names должен проходить `swift test`.
 - После изменения GUI shell должен проходить smoke-запуск `swift run OverlayBrowser -- https://example.com`.
 - После изменения WebKit profile тесты должны проверять `WKWebsiteDataStore.isPersistent` и
-  стабильный `identifier`.
+  стабильный `identifier`, а также наличие fixed cursor user script.
+- После изменения window privacy должен проходить runtime readback `CGWindowSharingState == 0` для
+  окна процесса `OverlayBrowser`.
 - После документационной чистки `rg` по активным Markdown-документам не должен находить старые
   назначения, исторические этапы или устаревшие product names.

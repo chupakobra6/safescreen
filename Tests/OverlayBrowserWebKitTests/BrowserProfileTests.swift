@@ -21,4 +21,19 @@ struct BrowserProfileTests {
 
         #expect(firstConfiguration.websiteDataStore === secondConfiguration.websiteDataStore)
     }
+
+    @Test
+    func injectsFixedCursorPolicyIntoAllFrames() throws {
+        let configuration = BrowserProfile.makeWebViewConfiguration()
+        let userScripts = configuration.userContentController.userScripts
+        let fixedCursorScript = try #require(userScripts.first {
+            $0.source == BrowserProfile.fixedCursorUserScriptSource
+        })
+
+        #expect(fixedCursorScript.injectionTime == .atDocumentStart)
+        #expect(fixedCursorScript.isForMainFrameOnly == false)
+        #expect(fixedCursorScript.source.contains("cursor: default !important"))
+        #expect(fixedCursorScript.source.contains("MutationObserver"))
+        #expect(fixedCursorScript.source.contains("style.setProperty(\"cursor\", cursorValue, \"important\")"))
+    }
 }

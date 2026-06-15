@@ -23,6 +23,7 @@ final class BrowserPanel: NSPanel {
         title = "Overlay Browser"
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
+        becomesKeyOnlyIfNeeded = true
         level = .floating
         sharingType = .none
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -41,10 +42,13 @@ final class BrowserPanel: NSPanel {
         acceptsKeyboardFocus = enabled
 
         if enabled {
-            makeKeyAndOrderFront(nil)
+            orderFrontRegardless()
+            makeKey()
+            NSCursor.arrow.set()
         } else {
             makeFirstResponder(nil)
             orderFrontRegardless()
+            NSCursor.arrow.set()
         }
     }
 }

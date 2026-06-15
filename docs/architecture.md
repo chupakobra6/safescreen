@@ -23,10 +23,12 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - постоянный WebKit-профиль через `WKWebsiteDataStore(forIdentifier:)`;
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - `NSPanel` с `.nonactivatingPanel`, `level = .floating`,
-  `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`;
+  `sharingType = .none`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`;
 - переключение видимости окна через Carbon hotkey `Option+Shift+S`;
 - отдельный input mode: окно принимает клавиатурный фокус только при взаимодействии с адресной
   строкой или содержимым страницы;
+- фиксированный default cursor внутри WebKit-страниц через `WKUserScript`, чтобы hover над ссылками
+  и полями не переключал системный указатель на hand или I-beam;
 - стартовая HTML-страница при запуске без URL.
 
 Не реализовано:
@@ -77,7 +79,7 @@ WKWebView
 ## WebKit-профиль
 
 `BrowserProfile` создает `WKWebViewConfiguration` с одним повторно используемым
-`WKWebsiteDataStore`.
+`WKWebsiteDataStore` и отдельным `WKUserContentController`.
 
 Текущий идентификатор профиля:
 
@@ -89,10 +91,21 @@ WKWebView
 перезапусками приложения. Этот store хранит cookie, cache storage, local storage, IndexedDB и другие
 поддерживаемые типы website data.
 
+`WKUserContentController` добавляет cursor user script на `documentStart` во все frames. Скрипт
+фиксирует `cursor: default !important` для элементов страницы и псевдоэлементов, а также
+нормализует inline cursor на hover и новых DOM-узлах через `MutationObserver`. Это не отключает
+текстовый ввод: input mode по-прежнему передает клавиатурные события в `WKWebView`, но hover не
+должен менять системный указатель на I-beam или hand.
+
 ## Окно и input mode
 
 `BrowserPanel` создается как floating `NSPanel`. По умолчанию он не становится key window. Это
 оставляет чтение и скролл отделенными от клавиаточного ввода.
+
+Окно выставляет `sharingType = .none`. Этот инвариант предназначен для macOS window sharing,
+screen capture и приложений, которые используют системные capture API. Поведение сторонних игр,
+оверлейных движков и античит-систем не является универсальным контрактом проекта; репозиторий не
+содержит обходов game capture или anti-cheat detection.
 
 `BrowserViewController` переводит окно в input mode при явном намерении ввода:
 
@@ -102,6 +115,10 @@ WKWebView
 
 `Escape` выводит окно из input mode. Закрытие окна не завершает процесс; повторный hotkey возвращает
 панель.
+
+Во время input mode окно получает key-фокус, потому macOS иначе не доставит текстовый ввод в
+`WKWebView`. При этом включение input mode использует `orderFrontRegardless()` и `makeKey()`, без
+активации приложения как обычного foreground-приложения.
 
 ## DOM-Control Слой
 
@@ -116,6 +133,8 @@ WKWebView
 - отсутствие сетевых запросов из control layer без отдельной явной настройки.
 
 Пока этот слой не реализован, документы и код не должны утверждать наличие DOM-control поведения.
+Фиксация cursor CSS считается базовой WebKit-политикой оболочки, а не расширенным DOM-control:
+она не вводит доменные правила, message bridge или пользовательское хранилище правил.
 
 ## Технические ограничения
 

@@ -41,6 +41,7 @@ swift run OverlayBrowser
 - `Option+Shift+S` показывает или прячет окно;
 - чтение и скролл работают без клавиаточного input mode;
 - клик в адресную строку или содержимое `WKWebView` переводит окно в input mode;
+- hover внутри `WKWebView` остается на default cursor, включая ссылки и текстовые поля;
 - `Escape` выводит окно из input mode;
 - закрытие окна не завершает процесс.
 
@@ -122,7 +123,32 @@ swift run OverlayBrowser -- https://example.com
 - адресная строка загружает `https://...`;
 - back, forward и reload работают;
 - `Option+Shift+S` прячет и возвращает окно;
+- при hover над ссылками и текстовыми полями внутри страницы системный курсор остается стрелкой;
 - закрытие окна не завершает процесс, повторный hotkey возвращает окно.
+
+## Проверка window privacy
+
+Системный инвариант privacy-поведения: окно `Overlay Browser` должно иметь
+`CGWindowSharingState == 0`. Это проверяет настройку macOS window sharing/capture API. Сторонние
+игры, game capture pipeline и anti-cheat системы не являются универсально проверяемым контрактом
+этого проекта.
+
+```bash
+cd /Users/igor/projects/safescreen
+swift run OverlayBrowser -- https://example.com >/tmp/overlay-browser-privacy.log 2>&1 &
+pid=$!
+sleep 4
+swift -e 'import CoreGraphics; let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]; let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []; let matches = windows.filter { ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser" }; guard let window = matches.first else { print("windowFound=false"); exit(1) }; print("windowFound=true"); print("sharingState=\(window[kCGWindowSharingState as String] ?? "missing")")'
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+```
+
+Ожидаемый результат:
+
+```text
+windowFound=true
+sharingState=0
+```
 
 ## Проверка персистентности профиля
 
