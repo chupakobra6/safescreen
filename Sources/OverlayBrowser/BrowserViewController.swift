@@ -48,9 +48,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         let view = FocusAwareWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = self
         view.allowsBackForwardNavigationGestures = true
-        view.underPageBackgroundColor = .clear
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
+        view.underPageBackgroundColor = .textBackgroundColor
         view.onInputIntent = { [weak self] in
             self?.enterInputMode()
         }

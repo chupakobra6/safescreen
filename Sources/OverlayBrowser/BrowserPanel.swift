@@ -3,7 +3,6 @@ import AppKit
 final class BrowserPanel: NSPanel {
     private static let defaultContentSize = NSSize(width: 1280, height: 800)
     private static let minimumContentSize = NSSize(width: 980, height: 640)
-    private static let defaultAlphaValue = 0.94
 
     private var acceptsKeyboardFocus = false
 
@@ -28,11 +27,11 @@ final class BrowserPanel: NSPanel {
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
         becomesKeyOnlyIfNeeded = true
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
-        isOpaque = false
-        backgroundColor = .clear
-        alphaValue = Self.defaultAlphaValue
+        titleVisibility = .visible
+        titlebarAppearsTransparent = false
+        isOpaque = true
+        backgroundColor = .windowBackgroundColor
+        alphaValue = 1.0
         contentMinSize = Self.minimumContentSize
         level = .floating
         sharingType = .none
