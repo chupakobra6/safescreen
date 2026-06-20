@@ -32,7 +32,8 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - непрозрачное читаемое окно по умолчанию с content size `420x820` и стартовой позицией справа как
   узкий sidebar; приложение не задает большой минимальный размер окна, чтобы окно можно было
   свободно ресайзить;
-- переключение видимости окна через Carbon hotkeys `Option+Shift+Z` и `Option+Shift+/`;
+- переключение видимости окна через modifier-only hotkeys `Left Option+Left Shift` и
+  `Right Option+Right Shift`;
 - отдельный input mode: окно принимает клавиатурный фокус только при взаимодействии с адресной
   строкой или содержимым страницы;
 - фиксированный default cursor внутри WebKit-страниц через `WKUserScript`, чтобы hover над ссылками

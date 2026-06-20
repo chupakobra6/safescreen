@@ -25,8 +25,9 @@
 - Клик вне `BrowserPanel` не скрывает окно автоматически.
 - Ошибки provisional navigation должны логироваться и отображаться в окне, а не оставлять пустой
   экран.
-- Глобальные горячие клавиши `Option+Shift+Z` и `Option+Shift+/` реализованы через Carbon hotkey,
-  чтобы не добавлять отдельную зависимость только ради переключения видимости.
+- Глобальные modifier-only горячие клавиши `Left Option+Left Shift` и `Right Option+Right Shift`
+  реализованы через Carbon hotkey на modifier key codes; handler дополнительно фильтрует левую и
+  правую сторону через `NSEvent` device flags.
 - Companion extension `OverlayFocusGuard` реализован как локальное Chrome/Chromium MV3-расширение,
   а не как стороннее расширение из магазина.
 - `OverlayFocusGuard` хранит состояние только в `chrome.storage.local.enabledOrigins` и включает

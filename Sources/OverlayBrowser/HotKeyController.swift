@@ -3,27 +3,54 @@ import Carbon
 
 final class HotKeyController {
     private static let signature = OSType(0x53465330) // SFS0
+
+    private enum ModifierSide {
+        case left
+        case right
+    }
+
     private struct HotKeyDefinition {
         let identifier: UInt32
         let keyCode: UInt32
         let modifiers: UInt32
+        let side: ModifierSide
         let label: String
     }
 
     private static let hotKeyDefinitions = [
         HotKeyDefinition(
             identifier: 1,
-            keyCode: UInt32(kVK_ANSI_Z),
-            modifiers: UInt32(optionKey) | UInt32(shiftKey),
-            label: "Option+Shift+Z"
+            keyCode: UInt32(kVK_Shift),
+            modifiers: UInt32(optionKey),
+            side: .left,
+            label: "Left Option+Left Shift"
         ),
         HotKeyDefinition(
             identifier: 2,
-            keyCode: UInt32(kVK_ANSI_Slash),
-            modifiers: UInt32(optionKey) | UInt32(shiftKey),
-            label: "Option+Shift+/"
+            keyCode: UInt32(kVK_Option),
+            modifiers: UInt32(shiftKey),
+            side: .left,
+            label: "Left Option+Left Shift"
+        ),
+        HotKeyDefinition(
+            identifier: 3,
+            keyCode: UInt32(kVK_RightShift),
+            modifiers: UInt32(optionKey),
+            side: .right,
+            label: "Right Option+Right Shift"
+        ),
+        HotKeyDefinition(
+            identifier: 4,
+            keyCode: UInt32(kVK_RightOption),
+            modifiers: UInt32(shiftKey),
+            side: .right,
+            label: "Right Option+Right Shift"
         )
     ]
+    private static let leftShiftFlag = NSEvent.ModifierFlags.RawValue(0x00000002)
+    private static let rightShiftFlag = NSEvent.ModifierFlags.RawValue(0x00000004)
+    private static let leftOptionFlag = NSEvent.ModifierFlags.RawValue(0x00000020)
+    private static let rightOptionFlag = NSEvent.ModifierFlags.RawValue(0x00000040)
 
     private let onPressed: () -> Void
     private var eventHandler: EventHandlerRef?
@@ -108,7 +135,8 @@ final class HotKeyController {
         }
 
         guard hotKeyID.signature == Self.signature,
-              Self.hotKeyDefinitions.contains(where: { $0.identifier == hotKeyID.id }) else {
+              let definition = Self.hotKeyDefinitions.first(where: { $0.identifier == hotKeyID.id }),
+              Self.activeModifierSide() == definition.side else {
             return noErr
         }
 
@@ -117,6 +145,32 @@ final class HotKeyController {
         }
 
         return noErr
+    }
+
+    private static func activeModifierSide() -> ModifierSide? {
+        let flags = NSEvent.modifierFlags
+        let independentFlags = flags.intersection(.deviceIndependentFlagsMask)
+        guard independentFlags.contains(.option), independentFlags.contains(.shift) else {
+            return nil
+        }
+
+        guard independentFlags.intersection([.command, .control, .function]).isEmpty else {
+            return nil
+        }
+
+        let rawFlags = flags.rawValue
+        let isLeftPairActive = rawFlags & leftOptionFlag != 0 && rawFlags & leftShiftFlag != 0
+        let isRightPairActive = rawFlags & rightOptionFlag != 0 && rawFlags & rightShiftFlag != 0
+        let hasMixedSideFlags = rawFlags & (leftOptionFlag | leftShiftFlag | rightOptionFlag | rightShiftFlag)
+
+        switch (isLeftPairActive, isRightPairActive, hasMixedSideFlags) {
+        case (true, false, leftOptionFlag | leftShiftFlag):
+            return .left
+        case (false, true, rightOptionFlag | rightShiftFlag):
+            return .right
+        default:
+            return nil
+        }
     }
 
     private func writeHotKeyError(_ operation: String, status: OSStatus) {
