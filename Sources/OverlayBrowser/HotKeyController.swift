@@ -14,14 +14,14 @@ final class HotKeyController {
         HotKeyDefinition(
             identifier: 1,
             keyCode: UInt32(kVK_ANSI_Z),
-            modifiers: UInt32(optionKey),
-            label: "Option+Z"
+            modifiers: UInt32(optionKey) | UInt32(shiftKey),
+            label: "Option+Shift+Z"
         ),
         HotKeyDefinition(
             identifier: 2,
             keyCode: UInt32(kVK_ANSI_Slash),
-            modifiers: UInt32(optionKey),
-            label: "Option+/"
+            modifiers: UInt32(optionKey) | UInt32(shiftKey),
+            label: "Option+Shift+/"
         )
     ]
 
