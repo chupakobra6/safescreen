@@ -8,9 +8,6 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     private var browserViewController: BrowserViewController?
     private var hotKeyController: HotKeyController?
     private var escapeMonitor: Any?
-    private var outsideMouseDownMonitor: Any?
-    private var outsideMouseDownEnabledAt = Date.distantFuture
-    private let outsideMouseDownActivationDelay: TimeInterval = 0.6
 
     init(arguments: [String]) {
         self.arguments = arguments
@@ -20,10 +17,6 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         if let escapeMonitor {
             NSEvent.removeMonitor(escapeMonitor)
         }
-
-        if let outsideMouseDownMonitor {
-            NSEvent.removeMonitor(outsideMouseDownMonitor)
-        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -31,7 +24,6 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         setupBrowserPanel()
         setupHotKey()
         setupEscapeMonitor()
-        setupOutsideMouseDownMonitor()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -49,8 +41,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         panel.contentViewController = viewController
-        panel.applyDefaultContentSize()
-        panel.center()
+        panel.applyDefaultSidebarPlacement()
         browserViewController = viewController
         browserPanel = panel
 
@@ -77,16 +68,6 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func setupOutsideMouseDownMonitor() {
-        outsideMouseDownMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.hideBrowserPanelIfMouseIsOutside()
-            }
-        }
-    }
-
     private func toggleBrowserPanel() {
         guard let panel = browserPanel else {
             return
@@ -99,30 +80,11 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func hideBrowserPanelIfMouseIsOutside() {
-        guard let panel = browserPanel, panel.isVisible else {
-            return
-        }
-
-        guard Date() >= outsideMouseDownEnabledAt else {
-            return
-        }
-
-        if panel.frame.contains(NSEvent.mouseLocation) {
-            return
-        }
-
-        fputs("OverlayBrowser hidden by outside mouse down\n", stderr)
-        hideBrowserPanel()
-    }
-
     private func showBrowserPanel() {
-        outsideMouseDownEnabledAt = Date().addingTimeInterval(outsideMouseDownActivationDelay)
         browserPanel?.orderFrontRegardless()
     }
 
     private func hideBrowserPanel() {
-        outsideMouseDownEnabledAt = .distantFuture
         browserPanel?.orderOut(nil)
         browserViewController?.exitInputMode()
     }

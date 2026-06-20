@@ -1,7 +1,8 @@
 import AppKit
 
 final class BrowserPanel: NSPanel {
-    private static let defaultContentSize = NSSize(width: 1280, height: 800)
+    private static let defaultContentSize = NSSize(width: 420, height: 820)
+    private static let defaultScreenMargin: CGFloat = 20
 
     init() {
         let contentRect = NSRect(origin: .zero, size: Self.defaultContentSize)
@@ -42,8 +43,21 @@ final class BrowserPanel: NSPanel {
         false
     }
 
-    func applyDefaultContentSize() {
+    func applyDefaultSidebarPlacement() {
         setContentSize(Self.defaultContentSize)
+
+        guard let visibleFrame = (screen ?? NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else {
+            center()
+            return
+        }
+
+        var newFrame = self.frame
+        newFrame.origin.x = visibleFrame.maxX - newFrame.width - Self.defaultScreenMargin
+        newFrame.origin.y = visibleFrame.midY - newFrame.height / 2
+        let minY = visibleFrame.minY + Self.defaultScreenMargin
+        let maxY = visibleFrame.maxY - newFrame.height - Self.defaultScreenMargin
+        newFrame.origin.y = maxY >= minY ? min(max(newFrame.origin.y, minY), maxY) : visibleFrame.minY
+        setFrame(newFrame, display: true)
     }
 
     func setInputMode(_ enabled: Bool) {

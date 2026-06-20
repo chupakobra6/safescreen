@@ -17,15 +17,15 @@
 - URL parser принимает только `http` и `https`; URL без схемы получает `https://`.
 - Окно приложения реализовано как `NSPanel` с `sharingType = .none`, `.nonactivatingPanel` и
   управляемым input mode.
-- Дефолтный content size окна: `1280x800`; окно непрозрачное; большой app-enforced минимальный
-  размер не задается.
+- Дефолтный content size окна: `420x820`; стартовая позиция справа как узкий sidebar; окно
+  непрозрачное; большой app-enforced минимальный размер не задается.
 - Input mode может делать окно key window для доставки текста в `WKWebView`, но не должен
   активировать приложение как обычное foreground-окно.
-- Клик вне `BrowserPanel` скрывает окно через AppKit global mouse monitor и сбрасывает input mode.
+- Клик вне `BrowserPanel` не скрывает окно автоматически.
 - Ошибки provisional navigation должны логироваться и отображаться в окне, а не оставлять пустой
   экран.
-- Глобальная горячая клавиша реализована через Carbon hotkey, чтобы не добавлять отдельную
-  зависимость только ради переключения видимости.
+- Глобальные горячие клавиши `Option+Z` и `Option+/` реализованы через Carbon hotkey, чтобы не
+  добавлять отдельную зависимость только ради переключения видимости.
 - Companion extension `OverlayFocusGuard` реализован как локальное Chrome/Chromium MV3-расширение,
   а не как стороннее расширение из магазина.
 - `OverlayFocusGuard` хранит состояние только в `chrome.storage.local.enabledOrigins` и включает

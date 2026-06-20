@@ -3,18 +3,38 @@ import Carbon
 
 final class HotKeyController {
     private static let signature = OSType(0x53465330) // SFS0
-    private static let identifier = UInt32(1)
+    private struct HotKeyDefinition {
+        let identifier: UInt32
+        let keyCode: UInt32
+        let modifiers: UInt32
+        let label: String
+    }
+
+    private static let hotKeyDefinitions = [
+        HotKeyDefinition(
+            identifier: 1,
+            keyCode: UInt32(kVK_ANSI_Z),
+            modifiers: UInt32(optionKey),
+            label: "Option+Z"
+        ),
+        HotKeyDefinition(
+            identifier: 2,
+            keyCode: UInt32(kVK_ANSI_Slash),
+            modifiers: UInt32(optionKey),
+            label: "Option+/"
+        )
+    ]
 
     private let onPressed: () -> Void
     private var eventHandler: EventHandlerRef?
-    private var hotKey: EventHotKeyRef?
+    private var hotKeys: [EventHotKeyRef] = []
 
     init(onPressed: @escaping () -> Void) {
         self.onPressed = onPressed
     }
 
     deinit {
-        if let hotKey {
+        for hotKey in hotKeys {
             UnregisterEventHotKey(hotKey)
         }
 
@@ -43,23 +63,27 @@ final class HotKeyController {
             return
         }
 
-        let hotKeyID = EventHotKeyID(
-            signature: Self.signature,
-            id: Self.identifier
-        )
+        for definition in Self.hotKeyDefinitions {
+            let hotKeyID = EventHotKeyID(
+                signature: Self.signature,
+                id: definition.identifier
+            )
 
-        let modifiers = UInt32(optionKey) | UInt32(shiftKey)
-        let registerStatus = RegisterEventHotKey(
-            UInt32(kVK_ANSI_S),
-            modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKey
-        )
+            var hotKey: EventHotKeyRef?
+            let registerStatus = RegisterEventHotKey(
+                definition.keyCode,
+                definition.modifiers,
+                hotKeyID,
+                GetApplicationEventTarget(),
+                0,
+                &hotKey
+            )
 
-        if registerStatus != noErr {
-            writeHotKeyError("RegisterEventHotKey", status: registerStatus)
+            if registerStatus == noErr, let hotKey {
+                hotKeys.append(hotKey)
+            } else {
+                writeHotKeyError("RegisterEventHotKey \(definition.label)", status: registerStatus)
+            }
         }
     }
 
@@ -83,7 +107,8 @@ final class HotKeyController {
             return status
         }
 
-        guard hotKeyID.signature == Self.signature, hotKeyID.id == Self.identifier else {
+        guard hotKeyID.signature == Self.signature,
+              Self.hotKeyDefinitions.contains(where: { $0.identifier == hotKeyID.id }) else {
             return noErr
         }
 
