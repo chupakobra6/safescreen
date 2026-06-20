@@ -95,28 +95,28 @@ find . -maxdepth 3 \( -path ./.git -o -path ./.build -o -name .DS_Store \) -prun
 ## Smoke-запуск без зависания терминала
 
 Команда собирает и запускает `OverlayBrowser`, ждет несколько секунд, затем останавливает процесс.
-Она нужна как быстрый sanity-check старта GUI из агента.
+Она нужна как быстрый sanity-check старта GUI из агента. Если уже запущен другой `OverlayBrowser`,
+readback фильтруется по PID временного процесса.
 
 ```bash
 cd /Users/igor/projects/safescreen
-logfile=$(mktemp /tmp/overlay-browser-smoke.XXXXXX)
-swift run OverlayBrowser -- https://example.com >"$logfile" 2>&1 &
-pid=$!
-sleep 4
-if kill -0 "$pid" 2>/dev/null; then
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null
-  exit_code=143
-else
-  wait "$pid"
-  exit_code=$?
-fi
-cat "$logfile"
-rm -f "$logfile"
-if [ "$exit_code" -eq 0 ] || [ "$exit_code" -eq 143 ]; then
-  exit 0
-fi
-exit "$exit_code"
+(
+  set -e
+  swift build
+  logfile=$(mktemp /tmp/overlay-browser-smoke.XXXXXX)
+  .build/debug/OverlayBrowser >"$logfile" 2>&1 &
+  pid=$!
+  cleanup() {
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    rm -f "$logfile"
+  }
+  trap cleanup EXIT
+  sleep 4
+  OVERLAY_PID="$pid" swift -e 'import CoreGraphics; import Foundation; let targetPID = Int(ProcessInfo.processInfo.environment["OVERLAY_PID"] ?? "") ?? -1; let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]; let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []; let matches = windows.filter { ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser" && ($0[kCGWindowOwnerPID as String] as? Int) == targetPID }; guard let window = matches.first else { print("windowFound=false"); exit(1) }; print("windowFound=true"); print("ownerPID=\(targetPID)"); print("sharingState=\(window[kCGWindowSharingState as String] ?? "missing")"); print("bounds=\(window[kCGWindowBounds as String] ?? "missing")")'
+  grep -F "OverlayBrowser navigation started: https://chatgpt.com/" "$logfile" >/dev/null
+  cat "$logfile"
+)
 ```
 
 Проверить, что после smoke не остался процесс:
@@ -190,19 +190,28 @@ swift run OverlayBrowser -- https://example.com
 
 ```bash
 cd /Users/igor/projects/safescreen
-swift build
-.build/debug/OverlayBrowser https://example.com >/tmp/overlay-browser-privacy.log 2>&1 &
-pid=$!
-sleep 0.5
-swift -e 'import CoreGraphics; let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]; let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []; let matches = windows.filter { ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser" }; guard let window = matches.first else { print("windowFound=false"); exit(1) }; print("windowFound=true"); print("sharingState=\(window[kCGWindowSharingState as String] ?? "missing")")'
-kill "$pid" 2>/dev/null || true
-wait "$pid" 2>/dev/null || true
+(
+  set -e
+  swift build
+  logfile=$(mktemp /tmp/overlay-browser-privacy.XXXXXX)
+  .build/debug/OverlayBrowser https://example.com >"$logfile" 2>&1 &
+  pid=$!
+  cleanup() {
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    rm -f "$logfile"
+  }
+  trap cleanup EXIT
+  sleep 0.5
+  OVERLAY_PID="$pid" swift -e 'import CoreGraphics; import Foundation; let targetPID = Int(ProcessInfo.processInfo.environment["OVERLAY_PID"] ?? "") ?? -1; let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]; let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []; let matches = windows.filter { ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser" && ($0[kCGWindowOwnerPID as String] as? Int) == targetPID }; guard let window = matches.first else { print("windowFound=false"); exit(1) }; print("windowFound=true"); print("ownerPID=\(targetPID)"); print("sharingState=\(window[kCGWindowSharingState as String] ?? "missing")")'
+)
 ```
 
 Ожидаемый результат:
 
 ```text
 windowFound=true
+ownerPID=<pid>
 sharingState=0
 ```
 

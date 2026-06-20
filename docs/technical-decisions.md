@@ -60,6 +60,7 @@
 - После изменения `OverlayFocusGuard` должны проходить JS syntax checks, manifest JSON parse и
   `OverlayFocusGuardExtensionTests`.
 - После изменения window privacy должен проходить runtime readback `CGWindowSharingState == 0` для
-  окна процесса `OverlayBrowser`.
+  окна процесса `OverlayBrowser`; readback должен фильтровать окно по PID тестового процесса, а не
+  только по имени owner.
 - После документационной чистки `rg` по активным Markdown-документам не должен находить старые
   назначения, исторические этапы или устаревшие product names.

@@ -40,8 +40,11 @@ struct URLArgumentParserTests {
     }
 
     @Test
-    func destinationDefaultsToChatGPTWithoutURL() {
-        #expect(URLArgumentParser.destination(from: ["OverlayBrowser"]) == .url(URLArgumentParser.defaultURL))
+    func destinationDefaultsToChatGPTWithoutURL() throws {
+        let expectedURL = try #require(URL(string: "https://chatgpt.com/"))
+
+        #expect(URLArgumentParser.defaultURL.absoluteString == "https://chatgpt.com/")
+        #expect(URLArgumentParser.destination(from: ["OverlayBrowser"]) == .url(expectedURL))
     }
 
     @Test
