@@ -146,8 +146,10 @@ screen capture и приложений, которые используют си
 активации приложения как обычного foreground-приложения. Выход из input mode очищает first responder
 и вызывает `resignKey()`.
 
-`Command+V` не перехватывается отдельным handler: вставка текста и изображений из clipboard идет
-через native WebKit/AppKit responder path текущего focused поля.
+`Command+V` обрабатывается локальным key monitor, потому `.nonactivatingPanel` не всегда надежно
+доставляет меню-команду paste в WebKit responder chain. Handler принимает только чистый
+`Command+V`, вызывает native AppKit paste action для текущего focused поля и подавляет исходный key
+event, чтобы не было двойной вставки. `Control+V` не считается paste shortcut.
 
 Ошибки provisional navigation логируются в stderr и показываются как простая HTML-страница ошибки,
 чтобы не оставлять пользователя с пустым окном без причины.

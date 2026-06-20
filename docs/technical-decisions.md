@@ -22,8 +22,9 @@
   непрозрачное; большой app-enforced минимальный размер не задается.
 - Input mode может делать окно key window для доставки текста в `WKWebView`, но не должен
   активировать приложение как обычное foreground-окно.
-- Paste shortcut `Command+V` не перехватывается отдельным handler; вставка идет через native
-  WebKit/AppKit responder chain текущего focused поля.
+- Paste shortcut `Command+V` перехватывается локальным key monitor только для overlay panel,
+  вызывает native AppKit paste action и подавляет исходный key event, чтобы избежать двойной
+  вставки; `Control+V` не поддерживается как paste shortcut.
 - Клик вне `BrowserPanel` не скрывает окно автоматически.
 - Ошибки provisional navigation должны логироваться и отображаться в окне, а не оставлять пустой
   экран.
