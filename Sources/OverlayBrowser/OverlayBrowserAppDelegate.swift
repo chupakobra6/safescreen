@@ -7,15 +7,15 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     private var browserPanel: BrowserPanel?
     private var browserViewController: BrowserViewController?
     private var hotKeyController: HotKeyController?
-    private var escapeMonitor: Any?
+    private var keyDownMonitor: Any?
 
     init(arguments: [String]) {
         self.arguments = arguments
     }
 
     deinit {
-        if let escapeMonitor {
-            NSEvent.removeMonitor(escapeMonitor)
+        if let keyDownMonitor {
+            NSEvent.removeMonitor(keyDownMonitor)
         }
     }
 
@@ -23,7 +23,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupBrowserPanel()
         setupHotKey()
-        setupEscapeMonitor()
+        setupKeyDownMonitor()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -57,15 +57,41 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         hotKeyController = controller
     }
 
-    private func setupEscapeMonitor() {
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.keyCode == UInt16(kVK_Escape) else {
-                return event
-            }
+    private func setupKeyDownMonitor() {
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleKeyDown(event) ?? event
+        }
+    }
 
-            self?.browserViewController?.exitInputMode()
+    private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
+        if event.keyCode == UInt16(kVK_Escape) {
+            browserViewController?.exitInputMode()
             return nil
         }
+
+        guard isPasteShortcut(event), isBrowserPanelEvent(event) else {
+            return event
+        }
+
+        _ = browserViewController?.pasteFromClipboard()
+        return nil
+    }
+
+    private func isPasteShortcut(_ event: NSEvent) -> Bool {
+        guard event.keyCode == UInt16(kVK_ANSI_V) else {
+            return false
+        }
+
+        let relevantFlags = event.modifierFlags.intersection([.command, .control, .option, .shift, .function])
+        return relevantFlags == .command || relevantFlags == .control
+    }
+
+    private func isBrowserPanelEvent(_ event: NSEvent) -> Bool {
+        guard let panel = browserPanel else {
+            return false
+        }
+
+        return event.window === panel || NSApp.keyWindow === panel
     }
 
     private func toggleBrowserPanel() {

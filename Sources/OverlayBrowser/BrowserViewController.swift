@@ -88,6 +88,21 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         onInputModeChanged?(false)
     }
 
+    func pasteFromClipboard() -> Bool {
+        enterInputMode()
+
+        guard let window = view.window else {
+            return false
+        }
+
+        let pasteSelector = #selector(NSText.paste(_:))
+        if NSApp.target(forAction: pasteSelector, to: nil, from: self) == nil {
+            window.makeFirstResponder(webView)
+        }
+
+        return NSApp.sendAction(pasteSelector, to: nil, from: self)
+    }
+
     func controlTextDidBeginEditing(_ notification: Notification) {
         enterInputMode()
     }

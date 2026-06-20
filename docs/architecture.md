@@ -141,6 +141,11 @@ screen capture и приложений, которые используют си
 активации приложения как обычного foreground-приложения. Выход из input mode очищает first responder
 и вызывает `resignKey()`.
 
+`Command+V` и `Control+V` обрабатываются local key-down monitor только для событий окна
+`BrowserPanel`. Handler включает input mode и отправляет стандартное AppKit действие `paste:` в
+текущий responder chain, чтобы вставка текста и изображений из clipboard шла через native WebKit
+paste path.
+
 Ошибки provisional navigation логируются в stderr и показываются как простая HTML-страница ошибки,
 чтобы не оставлять пользователя с пустым окном без причины.
 
