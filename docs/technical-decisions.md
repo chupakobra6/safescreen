@@ -27,7 +27,7 @@
   экран.
 - Глобальные modifier-only горячие клавиши `Left Option+Left Shift` и `Right Option+Right Shift`
   реализованы через Carbon hotkey на modifier key codes; handler дополнительно фильтрует левую и
-  правую сторону через `NSEvent` device flags.
+  правую сторону через `NSEvent` device flags с IOKit device-flag constants.
 - Companion extension `OverlayFocusGuard` реализован как локальное Chrome/Chromium MV3-расширение,
   а не как стороннее расширение из магазина.
 - `OverlayFocusGuard` хранит состояние только в `chrome.storage.local.enabledOrigins` и включает

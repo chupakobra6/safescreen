@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import IOKit
 
 final class HotKeyController {
     private static let signature = OSType(0x53465330) // SFS0
@@ -47,10 +48,11 @@ final class HotKeyController {
             label: "Right Option+Right Shift"
         )
     ]
-    private static let leftShiftFlag = NSEvent.ModifierFlags.RawValue(0x00000002)
-    private static let rightShiftFlag = NSEvent.ModifierFlags.RawValue(0x00000004)
-    private static let leftOptionFlag = NSEvent.ModifierFlags.RawValue(0x00000020)
-    private static let rightOptionFlag = NSEvent.ModifierFlags.RawValue(0x00000040)
+    private static let leftShiftFlag = NSEvent.ModifierFlags.RawValue(NX_DEVICELSHIFTKEYMASK)
+    private static let rightShiftFlag = NSEvent.ModifierFlags.RawValue(NX_DEVICERSHIFTKEYMASK)
+    private static let leftOptionFlag = NSEvent.ModifierFlags.RawValue(NX_DEVICELALTKEYMASK)
+    private static let rightOptionFlag = NSEvent.ModifierFlags.RawValue(NX_DEVICERALTKEYMASK)
+    private static let sideDeviceFlags = leftShiftFlag | rightShiftFlag | leftOptionFlag | rightOptionFlag
 
     private let onPressed: () -> Void
     private var eventHandler: EventHandlerRef?
@@ -61,16 +63,15 @@ final class HotKeyController {
     }
 
     deinit {
-        for hotKey in hotKeys {
-            UnregisterEventHotKey(hotKey)
-        }
-
-        if let eventHandler {
-            RemoveEventHandler(eventHandler)
-        }
+        unregisterHotKeys()
+        unregisterEventHandler()
     }
 
     func register() {
+        guard eventHandler == nil, hotKeys.isEmpty else {
+            return
+        }
+
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
@@ -90,6 +91,7 @@ final class HotKeyController {
             return
         }
 
+        var registeredHotKeys: [EventHotKeyRef] = []
         for definition in Self.hotKeyDefinitions {
             let hotKeyID = EventHotKeyID(
                 signature: Self.signature,
@@ -107,11 +109,18 @@ final class HotKeyController {
             )
 
             if registerStatus == noErr, let hotKey {
-                hotKeys.append(hotKey)
+                registeredHotKeys.append(hotKey)
             } else {
                 writeHotKeyError("RegisterEventHotKey \(definition.label)", status: registerStatus)
+                for registeredHotKey in registeredHotKeys {
+                    UnregisterEventHotKey(registeredHotKey)
+                }
+                unregisterEventHandler()
+                return
             }
         }
+
+        hotKeys = registeredHotKeys
     }
 
     fileprivate func handleHotKeyPressed(event: EventRef?) -> OSStatus {
@@ -158,18 +167,27 @@ final class HotKeyController {
             return nil
         }
 
-        let rawFlags = flags.rawValue
-        let isLeftPairActive = rawFlags & leftOptionFlag != 0 && rawFlags & leftShiftFlag != 0
-        let isRightPairActive = rawFlags & rightOptionFlag != 0 && rawFlags & rightShiftFlag != 0
-        let hasMixedSideFlags = rawFlags & (leftOptionFlag | leftShiftFlag | rightOptionFlag | rightShiftFlag)
-
-        switch (isLeftPairActive, isRightPairActive, hasMixedSideFlags) {
-        case (true, false, leftOptionFlag | leftShiftFlag):
+        switch flags.rawValue & sideDeviceFlags {
+        case leftOptionFlag | leftShiftFlag:
             return .left
-        case (false, true, rightOptionFlag | rightShiftFlag):
+        case rightOptionFlag | rightShiftFlag:
             return .right
         default:
             return nil
+        }
+    }
+
+    private func unregisterHotKeys() {
+        for hotKey in hotKeys {
+            UnregisterEventHotKey(hotKey)
+        }
+        hotKeys.removeAll()
+    }
+
+    private func unregisterEventHandler() {
+        if let eventHandler {
+            RemoveEventHandler(eventHandler)
+            self.eventHandler = nil
         }
     }
 

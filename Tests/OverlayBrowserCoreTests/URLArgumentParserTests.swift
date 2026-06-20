@@ -31,12 +31,13 @@ struct URLArgumentParserTests {
     }
 
     @Test
-    func destinationUsesFirstMeaningfulURLArgument() {
+    func destinationUsesFirstMeaningfulURLArgument() throws {
+        let expectedURL = try #require(URL(string: "https://example.com"))
         let destination = URLArgumentParser.destination(
             from: ["OverlayBrowser", "--ignored", "example.com"]
         )
 
-        #expect(destination == .url(URL(string: "https://example.com")!))
+        #expect(destination == .url(expectedURL))
     }
 
     @Test

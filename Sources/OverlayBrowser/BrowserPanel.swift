@@ -68,7 +68,6 @@ final class BrowserPanel: NSPanel {
         } else {
             makeFirstResponder(nil)
             resignKey()
-            orderFrontRegardless()
             NSCursor.arrow.set()
         }
     }
