@@ -81,6 +81,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
 
     func exitInputMode() {
         guard isInputMode else {
+            AppLog.info(.input, "exit-ignored")
             return
         }
 
@@ -105,13 +106,13 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         if let url = webView.url {
-            fputs("OverlayBrowser navigation started: \(url.absoluteString)\n", stderr)
+            AppLog.info(.navigation, "start", ["url": url.absoluteString])
         }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let url = webView.url {
-            fputs("OverlayBrowser navigation finished: \(url.absoluteString)\n", stderr)
+            AppLog.info(.navigation, "finish", ["url": url.absoluteString])
         }
         updateAddressFromWebView()
         updateNavigationState()
@@ -174,8 +175,10 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     private func loadInitialDestination() {
         switch initialDestination {
         case .url(let url):
+            AppLog.info(.navigation, "initial-url", ["url": url.absoluteString])
             load(url: url)
         case .fallbackStartPage:
+            AppLog.warning(.navigation, "initial-fallback")
             webView.loadHTMLString(StartPage.html, baseURL: nil)
         }
     }
@@ -212,6 +215,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
 
     private func loadAddress(from rawValue: String) {
         guard let url = URLArgumentParser.normalizedURL(from: rawValue) else {
+            AppLog.warning(.navigation, "invalid-address", ["value": rawValue])
             updateAddressFromWebView()
             return
         }
@@ -220,6 +224,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     }
 
     private func load(url: URL) {
+        AppLog.info(.navigation, "load", ["url": url.absoluteString])
         webView.load(URLRequest(url: url))
         addressField.stringValue = url.absoluteString
     }
@@ -270,7 +275,11 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
             return
         }
 
-        fputs("OverlayBrowser navigation failed: \(error.localizedDescription)\n", stderr)
+        AppLog.error(.navigation, "fail", [
+            "description": error.localizedDescription,
+            "domain": nsError.domain,
+            "code": "\(nsError.code)"
+        ])
     }
 
     private func escapeHTML(_ value: String) -> String {

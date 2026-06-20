@@ -33,6 +33,7 @@ final class BrowserPanel: NSPanel {
         level = .floating
         sharingType = .none
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        AppLog.info(.window, "configured", ["sharing": "none", "level": "floating"])
     }
 
     override var canBecomeKey: Bool {
@@ -58,6 +59,12 @@ final class BrowserPanel: NSPanel {
         let maxY = visibleFrame.maxY - newFrame.height - Self.defaultScreenMargin
         newFrame.origin.y = maxY >= minY ? min(max(newFrame.origin.y, minY), maxY) : visibleFrame.minY
         setFrame(newFrame, display: true)
+        AppLog.info(.window, "default-frame", [
+            "height": String(format: "%.0f", newFrame.height),
+            "width": String(format: "%.0f", newFrame.width),
+            "x": String(format: "%.0f", newFrame.origin.x),
+            "y": String(format: "%.0f", newFrame.origin.y)
+        ])
     }
 
     func setInputMode(_ enabled: Bool) {
@@ -65,10 +72,12 @@ final class BrowserPanel: NSPanel {
             orderFrontRegardless()
             makeKey()
             NSCursor.arrow.set()
+            AppLog.info(.input, "enter")
         } else {
             makeFirstResponder(nil)
             resignKey()
             NSCursor.arrow.set()
+            AppLog.info(.input, "exit")
         }
     }
 }

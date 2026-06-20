@@ -52,7 +52,7 @@ struct ExtensionManifestTests {
         #expect(source.contains("patchMethod(Document.prototype, \"hasFocus\", () => true)"))
         #expect(source.contains("\"blur\", \"visibilitychange\", \"webkitvisibilitychange\", \"pagehide\", \"freeze\""))
         #expect(source.contains("dispatchingRecoveryEvent"))
-        #expect(source.contains("uninstall()"))
+        #expect(source.contains("install();"))
         #expect(!source.contains("__overlayFocusGuard"))
     }
 
@@ -77,6 +77,14 @@ struct ExtensionManifestTests {
         #expect(source.contains("text: enabled ? \"ON\" : \"\""))
         #expect(source.contains("chrome.tabs.onActivated"))
         #expect(source.contains("chrome.storage.onChanged"))
+    }
+
+    @Test
+    func extensionScriptsUseSharedLogPrefix() throws {
+        for file in ["page-guard.js", "content.js", "background.js", "popup.js"] {
+            let source = try readExtensionFile(file)
+            #expect(source.contains("[OverlayFocusGuard]"))
+        }
     }
 
     private func expectContentScript(_ script: [String: Any], file: String) throws {

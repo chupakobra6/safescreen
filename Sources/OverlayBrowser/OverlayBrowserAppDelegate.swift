@@ -20,6 +20,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLog.info(.app, "launch", ["arguments": arguments.dropFirst().joined(separator: " ")])
         NSApp.setActivationPolicy(.accessory)
         setupBrowserPanel()
         setupHotKey()
@@ -47,6 +48,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
 
         panel.setInputMode(false)
         showBrowserPanel()
+        AppLog.info(.app, "ready")
     }
 
     private func setupHotKey() {
@@ -65,6 +67,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
         if event.keyCode == UInt16(kVK_Escape) {
+            AppLog.info(.input, "escape")
             browserViewController?.exitInputMode()
             return nil
         }
@@ -86,10 +89,12 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
 
     private func showBrowserPanel() {
         browserPanel?.orderFrontRegardless()
+        AppLog.info(.window, "show")
     }
 
     private func hideBrowserPanel() {
         browserViewController?.exitInputMode()
         browserPanel?.orderOut(nil)
+        AppLog.info(.window, "hide")
     }
 }

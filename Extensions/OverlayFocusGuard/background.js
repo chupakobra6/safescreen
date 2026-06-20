@@ -1,4 +1,13 @@
 const storageKey = "enabledOrigins";
+const component = "background";
+
+function log(event, fields = {}) {
+  console.info("[OverlayFocusGuard]", { component, event, ...fields });
+}
+
+function warn(event, fields = {}) {
+  console.warn("[OverlayFocusGuard]", { component, event, ...fields });
+}
 
 function originFromURL(rawURL) {
   try {
@@ -19,6 +28,7 @@ async function readEnabledOrigins() {
 
 async function updateBadgeForTab(tab) {
   if (!tab?.id) {
+    log("badge-skip", { reason: "missing-tab-id" });
     return;
   }
 
@@ -26,6 +36,7 @@ async function updateBadgeForTab(tab) {
   if (!origin) {
     await chrome.action.setBadgeText({ tabId: tab.id, text: "" });
     await chrome.action.setTitle({ tabId: tab.id, title: "Overlay Focus Guard" });
+    log("badge-unsupported", { tabId: tab.id });
     return;
   }
 
@@ -37,6 +48,7 @@ async function updateBadgeForTab(tab) {
     tabId: tab.id,
     title: enabled ? `Overlay Focus Guard enabled for ${origin}` : `Overlay Focus Guard disabled for ${origin}`
   });
+  log("badge-updated", { tabId: tab.id, origin, enabled });
 }
 
 async function updateActiveTabBadge() {
@@ -48,7 +60,9 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   try {
     const tab = await chrome.tabs.get(tabId);
     await updateBadgeForTab(tab);
-  } catch (_) {}
+  } catch (error) {
+    warn("badge-update-failed", { message: error.message });
+  }
 });
 
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
@@ -64,5 +78,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
+  log("installed");
   updateActiveTabBadge();
 });

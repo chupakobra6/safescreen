@@ -41,6 +41,9 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - silent media policy: запрет autoplay media playback через WebKit-конфигурацию, mute для
   `audio`/`video` и отсутствие native beep при ошибке адреса;
 - локальное MV3-расширение `OverlayFocusGuard` с ручным per-origin toggle для основного браузера;
+- структурированное логирование overlay app, extension и extension tooling;
+- E2E-runner с локальными тестовыми страницами для app, hotkeys, paste, focus guard,
+  per-origin persistence, extension reload и screen-share privacy sample;
 - стартовая HTML-страница как fallback для невалидного явного URL.
 
 Не реализовано:
@@ -59,6 +62,8 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 | `OverlayBrowserCore` | Тестируемая логика без AppKit/WebKit shell: стартовая страница, парсинг URL, стартовый destination. |
 | `OverlayBrowserWebKit` | Конфигурация WebKit-профиля и фабрика `WKWebViewConfiguration`. |
 | `Extensions/OverlayFocusGuard` | Локальное Chrome/Chromium MV3-расширение для per-origin focus/visibility guard в основном браузере. |
+| `tools/e2e` | Node E2E-runner: локальные HTML-страницы, запуск overlay, Chrome/Playwright проверки и отчеты в `logs/`. |
+| `tools/extension` | CLI-инструменты для запуска dev Chrome profile и reload локального unpacked extension без `chrome://extensions`. |
 | `OverlayBrowserCoreTests` | Тесты URL-нормализации и стартовой страницы. |
 | `OverlayBrowserWebKitTests` | Тесты persistent `WKWebsiteDataStore` и стабильного идентификатора профиля. |
 | `OverlayFocusGuardExtensionTests` | Тесты manifest и ключевых инвариантов browser extension. |
@@ -147,6 +152,27 @@ screen capture и приложений, которые используют си
 Ошибки provisional navigation логируются в stderr и показываются как простая HTML-страница ошибки,
 чтобы не оставлять пользователя с пустым окном без причины.
 
+## Логирование и E2E
+
+Overlay app пишет стабильный key-value формат в `stderr` с префиксом `[OverlayBrowser]`.
+Логируемые категории: `app`, `window`, `hotkey`, `input`, `navigation`.
+
+`OverlayFocusGuard` пишет диагностические записи в Chrome DevTools console с префиксом
+`[OverlayFocusGuard]` и полями `component`/`event`. CLI-инструменты для расширения используют
+префикс `[OverlayFocusGuardTools]`.
+
+`tools/e2e/run-e2e.mjs` поднимает локальный HTTP-сервер и предоставляет страницы:
+
+- `clipboard.html` - contenteditable target для проверки native `Command+V`;
+- `focus.html` - страница с `blur`/`visibilitychange`/`pagehide`/`freeze` событиями для проверки
+  `OverlayFocusGuard`;
+- `screen-share.html` - страница с `getDisplayMedia` и canvas sample для проверки, что overlay
+  marker не попадает в screen-share capture;
+- `overlay-marker.html` - яркий overlay marker для privacy sample.
+
+Runner пишет machine-readable отчет в `logs/e2e-*.json` и текстовый лог в `logs/e2e-*.log`.
+Шаги, заблокированные системными разрешениями macOS/Chrome, помечаются как `blocked`.
+
 ## DOM-Control Слой
 
 Планируемая зона развития - расширенный контроль DOM внутри самого Overlay Browser. Техническая
@@ -179,10 +205,16 @@ DOM-control: они не вводят доменные правила, message b
 - `popup.html`, `popup.css`, `popup.js` - один ручной переключатель для текущего origin;
 - `background.js` - service worker, который показывает badge `ON` на иконке для включенного origin.
 
-По умолчанию расширение ничего не включает для случайных сайтов. `page-guard.js` загружается в MAIN
-world без публичного `window.__...` API; focus/visibility patch устанавливается только после
-enabled-сигнала для текущего origin. При выключении расширение восстанавливает сохраненные
-descriptors и удаляет свои event blockers.
+Во время разработки `tools/extension/start-dev-chrome.mjs` запускает отдельный Chrome profile с
+подключенным unpacked extension, а `tools/extension/reload-focus-guard.mjs` обновляет расширение
+через `chrome.runtime.reload()` по Chrome DevTools Protocol.
+
+По умолчанию расширение не включает enabled-состояние для случайных сайтов. `page-guard.js`
+загружается в MAIN world без публичного `window.__...` API и ставит инертные wrappers на
+`document_start`, чтобы порядок event listeners был раньше listener-ов страницы. Пока origin
+выключен, wrappers возвращают native focus/visibility значения и не блокируют events. После
+enabled-сигнала для текущего origin они начинают возвращать visible/focused state и блокировать
+blur/hidden events; при выключении остаются инертными для текущего документа.
 
 Граница поведения:
 

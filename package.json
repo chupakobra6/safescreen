@@ -1,0 +1,19 @@
+{
+  "name": "overlay-browser-tooling",
+  "private": true,
+  "scripts": {
+    "check": "swift test && npm run check:extension && node --check tools/e2e/run-e2e.mjs && node --check tools/extension/start-dev-chrome.mjs && node --check tools/extension/reload-focus-guard.mjs",
+    "check:extension": "node --check Extensions/OverlayFocusGuard/page-guard.js && node --check Extensions/OverlayFocusGuard/content.js && node --check Extensions/OverlayFocusGuard/popup.js && node --check Extensions/OverlayFocusGuard/background.js && node -e 'JSON.parse(require(\"fs\").readFileSync(\"Extensions/OverlayFocusGuard/manifest.json\", \"utf8\")); console.log(\"manifest ok\")'",
+    "e2e": "node tools/e2e/run-e2e.mjs --all",
+    "e2e:app": "node tools/e2e/run-e2e.mjs --app",
+    "e2e:extension": "node tools/e2e/run-e2e.mjs --extension",
+    "e2e:reload-extension": "node tools/e2e/run-e2e.mjs --reload-extension",
+    "e2e:screen-share": "node tools/e2e/run-e2e.mjs --screen-share",
+    "extension:dev-chrome": "node tools/extension/start-dev-chrome.mjs",
+    "extension:reload": "node tools/extension/reload-focus-guard.mjs",
+    "playwright:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.61.0"
+  }
+}

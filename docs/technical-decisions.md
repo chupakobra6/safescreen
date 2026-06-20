@@ -27,6 +27,8 @@
 - Клик вне `BrowserPanel` не скрывает окно автоматически.
 - Ошибки provisional navigation должны логироваться и отображаться в окне, а не оставлять пустой
   экран.
+- Overlay app пишет диагностические события в `stderr` в стабильном key-value формате с префиксом
+  `[OverlayBrowser]`.
 - Глобальные modifier-only горячие клавиши `Left Option+Left Shift` и `Right Option+Right Shift`
   определяются polling-проверкой текущего HID key state через `CGEventSource.keyState`; левая и
   правая стороны проверяются отдельными Carbon key codes.
@@ -34,8 +36,17 @@
   а не как стороннее расширение из магазина.
 - `OverlayFocusGuard` хранит состояние только в `chrome.storage.local.enabledOrigins` и включает
   focus/visibility guard вручную для exact `http`/`https` origin.
-- MAIN-world script расширения загружается на `document_start`, но patch descriptors/events
-  устанавливаются только когда текущий origin включен.
+- `OverlayFocusGuard` пишет диагностические события в Chrome DevTools console с префиксом
+  `[OverlayFocusGuard]`.
+- MAIN-world script расширения загружается на `document_start` и сразу ставит инертные wrappers,
+  чтобы они были раньше listener-ов страницы; активное focus/visibility поведение включается только
+  когда текущий exact origin разрешен.
+- Автоматизация разработки расширения идет через отдельный Chrome profile из
+  `.state/extension-dev-chrome` и CDP reload, а не через ручное обновление на
+  `chrome://extensions`; по умолчанию используется Playwright Chrome for Testing/Chromium, потому
+  branded Google Chrome может игнорировать command-line unpacked extension flags.
+- E2E-runner живет в `tools/e2e/run-e2e.mjs`, поднимает локальные проверочные страницы и пишет
+  отчеты в `logs/e2e-*.json`/`.log`.
 - Расширенный DOM-control должен строиться внутри WebKit shell через `WKUserScript`,
   `WKScriptMessageHandler` и доменно-ограниченные policies.
 - Проект проверяет системные macOS-инварианты capture/focus для звонков и демонстрации экрана, но
@@ -62,6 +73,8 @@
   стабильный `identifier`, а также наличие fixed cursor и silent media user scripts.
 - После изменения `OverlayFocusGuard` должны проходить JS syntax checks, manifest JSON parse и
   `OverlayFocusGuardExtensionTests`.
+- После изменения app shell, hotkeys, paste, extension guard, persistence, reload или screen-share
+  privacy нужно запускать релевантный режим `tools/e2e/run-e2e.mjs`.
 - После изменения window privacy должен проходить runtime readback `CGWindowSharingState == 0` для
   окна процесса `OverlayBrowser`; readback должен фильтровать окно по PID тестового процесса, а не
   только по имени owner.

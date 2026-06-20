@@ -18,6 +18,19 @@ swift --version
 xcode-select -p
 ```
 
+Установить Node tooling для E2E:
+
+```bash
+cd /Users/igor/projects/safescreen
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install
+npm run playwright:install
+```
+
+`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` ставит JS-зависимости без тяжелого скачивания
+браузера на этапе npm install. `npm run playwright:install` отдельно ставит совместимый Chrome for
+Testing для extension/screen-share automation. `CHROME_PATH` можно использовать как override, но
+обычный branded Google Chrome может игнорировать unpacked extension flags.
+
 ## Запуск
 
 Запустить с URL:
@@ -75,9 +88,76 @@ node --check Extensions/OverlayFocusGuard/page-guard.js
 node --check Extensions/OverlayFocusGuard/content.js
 node --check Extensions/OverlayFocusGuard/popup.js
 node --check Extensions/OverlayFocusGuard/background.js
+node --check tools/extension/start-dev-chrome.mjs
+node --check tools/extension/reload-focus-guard.mjs
 node -e 'JSON.parse(require("fs").readFileSync("Extensions/OverlayFocusGuard/manifest.json", "utf8")); console.log("manifest ok")'
 swift test --filter OverlayFocusGuardExtensionTests
 ```
+
+## E2E-проверки
+
+Основной E2E-runner поднимает локальный HTTP-сервер с тестовыми страницами, собирает приложение,
+запускает overlay, проверяет window privacy, hotkeys, native `Command+V`, расширение
+`OverlayFocusGuard`, персистентность per-origin toggle, reload extension и screen-share sample.
+Отчеты пишутся в `logs/e2e-*.json` и `logs/e2e-*.log`.
+
+Только overlay app:
+
+```bash
+cd /Users/igor/projects/safescreen
+npm run e2e:app
+```
+
+Расширение в тестовом Chrome profile:
+
+```bash
+cd /Users/igor/projects/safescreen
+npm run e2e:extension
+```
+
+Автоматический reload extension в тестовом Chrome profile:
+
+```bash
+cd /Users/igor/projects/safescreen
+npm run e2e:reload-extension
+```
+
+Проверка screen-share exclusion через локальную страницу `getDisplayMedia`:
+
+```bash
+cd /Users/igor/projects/safescreen
+npm run e2e:screen-share
+```
+
+Полный прогон:
+
+```bash
+cd /Users/igor/projects/safescreen
+npm run e2e
+```
+
+Если macOS или Chrome не выдали разрешение на screen recording/display capture, соответствующий
+шаг помечается как `blocked`, а не как успешная проверка. Hotkey/paste E2E требуют Accessibility
+trust для процесса, который отправляет синтетические mouse/keyboard events; без этого runner также
+пишет `blocked`.
+
+## Логи
+
+Приложение пишет структурированные строки в `stderr`:
+
+```text
+[OverlayBrowser] app=OverlayBrowser level=info pid=<pid> category=<category> event=<event> key=value
+```
+
+Основные категории: `app`, `window`, `hotkey`, `input`, `navigation`.
+
+Расширение пишет в Chrome DevTools console:
+
+```text
+[OverlayFocusGuard] { component: "<component>", event: "<event>", ... }
+```
+
+Команды tooling для extension пишут в stdout с префиксом `[OverlayFocusGuardTools]`.
 
 Проверить стиль diff перед коммитом:
 
@@ -115,7 +195,7 @@ cd /Users/igor/projects/safescreen
   trap cleanup EXIT
   sleep 4
   OVERLAY_PID="$pid" swift -e 'import CoreGraphics; import Foundation; let targetPID = Int(ProcessInfo.processInfo.environment["OVERLAY_PID"] ?? "") ?? -1; let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]; let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []; let matches = windows.filter { ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser" && ($0[kCGWindowOwnerPID as String] as? Int) == targetPID }; guard let window = matches.first else { print("windowFound=false"); exit(1) }; print("windowFound=true"); print("ownerPID=\(targetPID)"); print("sharingState=\(window[kCGWindowSharingState as String] ?? "missing")"); print("bounds=\(window[kCGWindowBounds as String] ?? "missing")")'
-  grep -F "OverlayBrowser navigation started: https://chatgpt.com/" "$logfile" >/dev/null
+  grep -F "category=navigation event=initial-url url=https://chatgpt.com/" "$logfile" >/dev/null
   cat "$logfile"
 )
 ```
@@ -159,6 +239,20 @@ pgrep -fl OverlayBrowser || true
 - случайные сайты не получают enabled-состояние;
 - `chrome://`, `file://` и extension pages не поддерживаются;
 - расширение не публикуется в Chrome Web Store и устанавливается как локальное unpacked extension.
+
+Автоматическое обновление во время разработки:
+
+```bash
+cd /Users/igor/projects/safescreen
+node tools/extension/start-dev-chrome.mjs --url https://chatgpt.com
+node tools/extension/reload-focus-guard.mjs
+```
+
+`start-dev-chrome.mjs` открывает отдельный Chrome for Testing/Chromium profile из
+`.state/extension-dev-chrome` с подключенной папкой `Extensions/OverlayFocusGuard` и DevTools
+endpoint на `127.0.0.1:9222`.
+`reload-focus-guard.mjs` подключается к этому endpoint и вызывает `chrome.runtime.reload()` у
+service worker расширения. Обычный пользовательский Chrome profile не меняется.
 
 ## Ручная проверка UI
 

@@ -3,6 +3,15 @@
   const toggleEventName = "overlay-focus-guard:set-enabled";
   const refreshMessageType = "overlay-focus-guard-refresh";
   const statusMessageType = "overlay-focus-guard-status";
+  const component = "content";
+
+  function log(event, fields = {}) {
+    console.info("[OverlayFocusGuard]", { component, event, ...fields });
+  }
+
+  function warn(event, fields = {}) {
+    console.warn("[OverlayFocusGuard]", { component, event, ...fields });
+  }
 
   function currentOrigin() {
     try {
@@ -23,6 +32,7 @@
         origin
       }
     }));
+    log("publish", { enabled, origin });
   }
 
   async function readEnabledOrigins() {
@@ -40,23 +50,32 @@
     const enabledOrigins = await readEnabledOrigins();
     const enabled = enabledOrigins[origin] === true;
     publish(enabled, origin);
+    log("sync", { enabled, origin });
     return { origin, enabled };
   }
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local" && changes[storageKey]) {
-      sync();
+      sync().catch((error) => warn("sync-failed", { message: error.message }));
     }
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === refreshMessageType) {
-      sync().then(sendResponse);
+      log("message-refresh");
+      sync().then(sendResponse).catch((error) => {
+        warn("message-refresh-failed", { message: error.message });
+        sendResponse({ error: error.message });
+      });
       return true;
     }
 
     if (message?.type === statusMessageType) {
-      sync().then(sendResponse);
+      log("message-status");
+      sync().then(sendResponse).catch((error) => {
+        warn("message-status-failed", { message: error.message });
+        sendResponse({ error: error.message });
+      });
       return true;
     }
 
@@ -64,8 +83,8 @@
   });
 
   window.addEventListener("pageshow", () => {
-    sync();
+    sync().catch((error) => warn("sync-failed", { message: error.message }));
   });
 
-  sync();
+  sync().catch((error) => warn("sync-failed", { message: error.message }));
 })();

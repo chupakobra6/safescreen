@@ -9,6 +9,7 @@ build/
 DerivedData/
 dist/
 out/
+node_modules/
 
 # Local captures, logs, and generated validation artifacts.
 captures/

@@ -1,12 +1,20 @@
 (() => {
   const toggleEventName = "overlay-focus-guard:set-enabled";
+  const component = "page-guard";
 
   const state = {
     enabled: false,
     installed: false,
-    dispatchingRecoveryEvent: false,
-    restorers: []
+    dispatchingRecoveryEvent: false
   };
+
+  function log(event, fields = {}) {
+    console.info("[OverlayFocusGuard]", { component, event, ...fields });
+  }
+
+  function warn(event, fields = {}) {
+    console.warn("[OverlayFocusGuard]", { component, event, ...fields });
+  }
 
   function findPropertyDescriptor(object, propertyName) {
     let current = object;
@@ -18,10 +26,6 @@
       current = Object.getPrototypeOf(current);
     }
     return null;
-  }
-
-  function addRestorer(callback) {
-    state.restorers.push(callback);
   }
 
   function patchGetter(prototype, propertyName, value) {
@@ -38,8 +42,8 @@
           return state.enabled ? value : original.descriptor.get?.call(this);
         }
       });
-      addRestorer(() => Object.defineProperty(original.owner, propertyName, original.descriptor));
     } catch (_) {
+      warn("patch-getter-failed", { propertyName });
       // Some pages harden descriptors. Leave them unchanged instead of failing the page.
     }
   }
@@ -62,8 +66,8 @@
           return original.descriptor.value.apply(this, args);
         }
       });
-      addRestorer(() => Object.defineProperty(original.owner, methodName, original.descriptor));
     } catch (_) {
+      warn("patch-method-failed", { methodName });
       // Leave native behavior if this page does not allow patching.
     }
   }
@@ -78,7 +82,6 @@
     };
 
     target.addEventListener(eventName, handler, true);
-    addRestorer(() => target.removeEventListener(eventName, handler, true));
   }
 
   function dispatchVisibleFocusState() {
@@ -110,34 +113,26 @@
     }
 
     state.installed = true;
-  }
-
-  function uninstall() {
-    while (state.restorers.length > 0) {
-      const restore = state.restorers.pop();
-      try {
-        restore();
-      } catch (_) {}
-    }
-    state.installed = false;
+    log("installed");
   }
 
   function setEnabled(enabled) {
     const nextEnabled = Boolean(enabled);
-    if (nextEnabled) {
-      install();
-    }
-
+    const previousEnabled = state.enabled;
     state.enabled = nextEnabled;
 
     if (nextEnabled) {
       dispatchVisibleFocusState();
-    } else {
-      uninstall();
+    }
+
+    if (previousEnabled !== nextEnabled) {
+      log("enabled-changed", { enabled: nextEnabled });
     }
   }
 
   window.addEventListener(toggleEventName, (event) => {
     setEnabled(event.detail?.enabled === true);
   });
+
+  install();
 })();

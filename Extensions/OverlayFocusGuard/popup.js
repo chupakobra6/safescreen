@@ -1,5 +1,6 @@
 const storageKey = "enabledOrigins";
 const refreshMessageType = "overlay-focus-guard-refresh";
+const component = "popup";
 
 const originElement = document.getElementById("origin");
 const statusElement = document.getElementById("status");
@@ -8,6 +9,14 @@ const toggleButton = document.getElementById("toggle");
 let activeTab = null;
 let activeOrigin = null;
 let isEnabled = false;
+
+function log(event, fields = {}) {
+  console.info("[OverlayFocusGuard]", { component, event, ...fields });
+}
+
+function warn(event, fields = {}) {
+  console.warn("[OverlayFocusGuard]", { component, event, ...fields });
+}
 
 function originFromURL(rawURL) {
   try {
@@ -49,14 +58,18 @@ async function refreshActiveTab() {
 
   try {
     await chrome.tabs.sendMessage(activeTab.id, { type: refreshMessageType });
-  } catch (_) {
+    log("tab-refreshed", { tabId: activeTab.id });
+  } catch (error) {
+    warn("tab-refresh-failed", { message: error.message });
     // The tab may not have a content script, for example chrome:// pages.
   }
 
   try {
     await chrome.action.setBadgeText({ tabId: activeTab.id, text: isEnabled ? "" : "ON" });
     await chrome.action.setBadgeBackgroundColor({ tabId: activeTab.id, color: "#15803d" });
-  } catch (_) {}
+  } catch (error) {
+    warn("badge-update-failed", { message: error.message });
+  }
 }
 
 function renderUnsupported() {
@@ -64,6 +77,7 @@ function renderUnsupported() {
   statusElement.textContent = "Unsupported page";
   toggleButton.textContent = "Unavailable";
   toggleButton.disabled = true;
+  log("render-unsupported", { url: activeTab?.url || "" });
 }
 
 function renderSupported() {
@@ -71,6 +85,7 @@ function renderSupported() {
   statusElement.textContent = isEnabled ? "Enabled on this site" : "Disabled on this site";
   toggleButton.textContent = isEnabled ? "Disable for this site" : "Enable for this site";
   toggleButton.disabled = false;
+  log("render-supported", { origin: activeOrigin, enabled: isEnabled });
 }
 
 async function loadState() {
@@ -94,6 +109,7 @@ toggleButton.addEventListener("click", async () => {
 
   toggleButton.disabled = true;
   await writeEnabledOrigin(activeOrigin, !isEnabled);
+  log("toggle", { origin: activeOrigin, enabled: !isEnabled });
   await refreshActiveTab();
   await loadState();
 });

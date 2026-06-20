@@ -1,16 +1,12 @@
 import AppKit
 import Carbon
+import OverlayBrowserCore
 
 final class HotKeyController {
-    private enum ModifierSide {
-        case left
-        case right
-    }
-
     private static let pollingInterval: TimeInterval = 0.04
     private let onPressed: () -> Void
     private var pollingTimer: Timer?
-    private var pressedSide: ModifierSide?
+    private var pressedSide: ModifierHotKeySide?
 
     init(onPressed: @escaping () -> Void) {
         self.onPressed = onPressed
@@ -30,29 +26,31 @@ final class HotKeyController {
         }
         timer.tolerance = Self.pollingInterval / 2
         pollingTimer = timer
+        AppLog.info(.hotKey, "polling-start", ["interval": "\(Self.pollingInterval)"])
     }
 
-    private static func activeModifierSide() -> ModifierSide? {
-        guard !isKeyPressed(kVK_Command),
-              !isKeyPressed(kVK_RightCommand),
-              !isKeyPressed(kVK_Control),
-              !isKeyPressed(kVK_RightControl),
-              !isKeyPressed(kVK_Function) else {
-            return nil
-        }
-
-        let leftPairActive = isKeyPressed(kVK_Option) && isKeyPressed(kVK_Shift)
-        let rightPairActive = isKeyPressed(kVK_RightOption) && isKeyPressed(kVK_RightShift)
-        let hasLeftSideModifier = isKeyPressed(kVK_Option) || isKeyPressed(kVK_Shift)
-        let hasRightSideModifier = isKeyPressed(kVK_RightOption) || isKeyPressed(kVK_RightShift)
-
-        switch (leftPairActive, rightPairActive, hasLeftSideModifier, hasRightSideModifier) {
-        case (true, false, true, false):
-            return .left
-        case (false, true, false, true):
-            return .right
-        default:
-            return nil
+    private static func activeModifierSide() -> ModifierHotKeySide? {
+        ModifierHotKeyPolicy.activeSide { key in
+            switch key {
+            case .leftOption:
+                return isKeyPressed(kVK_Option)
+            case .rightOption:
+                return isKeyPressed(kVK_RightOption)
+            case .leftShift:
+                return isKeyPressed(kVK_Shift)
+            case .rightShift:
+                return isKeyPressed(kVK_RightShift)
+            case .leftCommand:
+                return isKeyPressed(kVK_Command)
+            case .rightCommand:
+                return isKeyPressed(kVK_RightCommand)
+            case .leftControl:
+                return isKeyPressed(kVK_Control)
+            case .rightControl:
+                return isKeyPressed(kVK_RightControl)
+            case .function:
+                return isKeyPressed(kVK_Function)
+            }
         }
     }
 
@@ -71,6 +69,7 @@ final class HotKeyController {
         }
 
         pressedSide = activeSide
+        AppLog.info(.hotKey, "trigger", ["side": activeSide == .left ? "left" : "right"])
         onPressed()
     }
 }
