@@ -85,7 +85,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func hideBrowserPanel() {
-        browserPanel?.orderOut(nil)
         browserViewController?.exitInputMode()
+        browserPanel?.orderOut(nil)
     }
 }
