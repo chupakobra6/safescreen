@@ -40,8 +40,15 @@ struct URLArgumentParserTests {
     }
 
     @Test
-    func destinationFallsBackToStartPageWithoutURL() {
-        #expect(URLArgumentParser.destination(from: ["OverlayBrowser"]) == .fallbackStartPage)
+    func destinationDefaultsToChatGPTWithoutURL() {
+        #expect(URLArgumentParser.destination(from: ["OverlayBrowser"]) == .url(URLArgumentParser.defaultURL))
+    }
+
+    @Test
+    func destinationFallsBackToStartPageForInvalidURL() {
+        #expect(
+            URLArgumentParser.destination(from: ["OverlayBrowser", "file:///tmp/test.html"]) == .fallbackStartPage
+        )
     }
 
     @Test

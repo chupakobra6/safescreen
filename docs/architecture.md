@@ -23,7 +23,8 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 Реализовано:
 
 - executable product `OverlayBrowser`;
-- встроенный `WKWebView` с адресной строкой, back/forward/reload и URL из CLI-аргумента;
+- встроенный `WKWebView` с адресной строкой, back/forward/reload, дефолтным URL
+  `https://chatgpt.com/` и URL из CLI-аргумента;
 - постоянный WebKit-профиль через `WKWebsiteDataStore(forIdentifier:)`;
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - `NSPanel` с `.nonactivatingPanel`, `level = .floating`,
@@ -39,7 +40,7 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - silent media policy: запрет autoplay media playback через WebKit-конфигурацию, mute для
   `audio`/`video` и отсутствие native beep при ошибке адреса;
 - локальное MV3-расширение `OverlayFocusGuard` с ручным per-origin toggle для основного браузера;
-- стартовая HTML-страница при запуске без URL.
+- стартовая HTML-страница как fallback для невалидного явного URL.
 
 Не реализовано:
 
@@ -87,7 +88,8 @@ WKWebView
 - `URLArgumentParser` берет первый значимый аргумент после имени процесса;
 - URL без схемы нормализуется в `https://...`;
 - разрешены только `http` и `https`;
-- невалидный или отсутствующий URL открывает встроенную стартовую страницу.
+- отсутствующий URL открывает `https://chatgpt.com/`;
+- невалидный URL открывает встроенную стартовую страницу.
 
 ## WebKit-профиль
 

@@ -14,7 +14,8 @@
   frames.
 - WebKit media playback требует пользовательского действия, а user script глушит `audio`/`video` и
   не патчит `AudioContext`, чтобы не ломать сложные приложения.
-- URL parser принимает только `http` и `https`; URL без схемы получает `https://`.
+- URL parser принимает только `http` и `https`; URL без схемы получает `https://`; запуск без URL
+  открывает `https://chatgpt.com/`.
 - Окно приложения реализовано как `NSPanel` с `sharingType = .none`, `.nonactivatingPanel` и
   управляемым input mode.
 - Дефолтный content size окна: `420x820`; стартовая позиция справа как узкий sidebar; окно

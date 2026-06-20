@@ -1,6 +1,8 @@
 import Foundation
 
 public enum URLArgumentParser {
+    public static let defaultURL = URL(string: "https://chatgpt.com/")!
+
     public static func destination(from arguments: [String]) -> StartDestination {
         guard let rawURL = arguments
             .dropFirst()
@@ -9,7 +11,7 @@ public enum URLArgumentParser {
                 return !trimmed.isEmpty && trimmed != "--" && !trimmed.hasPrefix("-")
             })
         else {
-            return .fallbackStartPage
+            return .url(defaultURL)
         }
 
         guard let url = normalizedURL(from: rawURL) else {
