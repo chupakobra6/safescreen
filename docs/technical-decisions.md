@@ -22,14 +22,14 @@
   непрозрачное; большой app-enforced минимальный размер не задается.
 - Input mode может делать окно key window для доставки текста в `WKWebView`, но не должен
   активировать приложение как обычное foreground-окно.
-- Paste shortcuts `Command+V` и `Control+V` обрабатываются только local key-down monitor для
-  focused `BrowserPanel` и отправляют стандартное AppKit действие `paste:` в responder chain.
+- Paste shortcut `Command+V` не перехватывается отдельным handler; вставка идет через native
+  WebKit/AppKit responder chain текущего focused поля.
 - Клик вне `BrowserPanel` не скрывает окно автоматически.
 - Ошибки provisional navigation должны логироваться и отображаться в окне, а не оставлять пустой
   экран.
 - Глобальные modifier-only горячие клавиши `Left Option+Left Shift` и `Right Option+Right Shift`
-  реализованы через Carbon hotkey на modifier key codes; handler дополнительно фильтрует левую и
-  правую сторону через `NSEvent` device flags с IOKit device-flag constants.
+  определяются polling-проверкой текущего HID key state через `CGEventSource.keyState`; левая и
+  правая стороны проверяются отдельными Carbon key codes.
 - Companion extension `OverlayFocusGuard` реализован как локальное Chrome/Chromium MV3-расширение,
   а не как стороннее расширение из магазина.
 - `OverlayFocusGuard` хранит состояние только в `chrome.storage.local.enabledOrigins` и включает

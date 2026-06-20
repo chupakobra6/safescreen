@@ -69,29 +69,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
 
-        guard isPasteShortcut(event), isBrowserPanelEvent(event) else {
-            return event
-        }
-
-        _ = browserViewController?.pasteFromClipboard()
-        return nil
-    }
-
-    private func isPasteShortcut(_ event: NSEvent) -> Bool {
-        guard event.keyCode == UInt16(kVK_ANSI_V) else {
-            return false
-        }
-
-        let relevantFlags = event.modifierFlags.intersection([.command, .control, .option, .shift, .function])
-        return relevantFlags == .command || relevantFlags == .control
-    }
-
-    private func isBrowserPanelEvent(_ event: NSEvent) -> Bool {
-        guard let panel = browserPanel else {
-            return false
-        }
-
-        return event.window === panel || NSApp.keyWindow === panel
+        return event
     }
 
     private func toggleBrowserPanel() {

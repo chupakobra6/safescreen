@@ -64,7 +64,6 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Carbon"),
-                .linkedFramework("IOKit"),
                 .linkedFramework("WebKit")
             ]
         ),

@@ -45,7 +45,7 @@ swift run OverlayBrowser
 - окно можно свободно ресайзить, без большого app-enforced минимального размера;
 - чтение и скролл работают без клавиаточного input mode;
 - клик в адресную строку или содержимое `WKWebView` переводит окно в input mode;
-- `Command+V` и `Control+V` вставляют содержимое clipboard в focused поле overlay window;
+- `Command+V` вставляет содержимое clipboard в focused поле overlay window через native WebKit/AppKit path;
 - hover внутри `WKWebView` остается на default cursor, включая ссылки и текстовые поля;
 - страницы не должны издавать звук через обычные `audio`/`video` пути;
 - `Escape` выводит окно из input mode;
@@ -175,7 +175,7 @@ swift run OverlayBrowser -- https://example.com
 - адресная строка загружает `https://...`;
 - back, forward и reload работают;
 - `Left Option+Left Shift` и `Right Option+Right Shift` прячут и возвращают окно;
-- `Command+V` и `Control+V` вставляют текст или изображение из clipboard в активное поле страницы;
+- `Command+V` вставляет текст или изображение из clipboard в активное поле страницы;
 - клик по другому приложению не скрывает окно и не меняет `sharingType = .none`;
 - при hover над ссылками и текстовыми полями внутри страницы системный курсор остается стрелкой;
 - invalid URL в адресной строке не издает системный beep;
