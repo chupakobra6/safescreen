@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { access, mkdir, readdir, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,43 +31,33 @@ async function fileExists(candidate) {
 }
 
 async function playwrightChromiumExecutablePath() {
-  const cacheRoot = path.join(os.homedir(), "Library", "Caches", "ms-playwright");
-  let entries = [];
   try {
-    entries = await readdir(cacheRoot);
+    const playwright = await import("playwright");
+    const candidate = playwright.chromium.executablePath();
+    return await fileExists(candidate) ? candidate : null;
   } catch (_) {
     return null;
   }
-
-  const chromiumEntries = entries
-    .filter((entry) => entry.startsWith("chromium-"))
-    .sort()
-    .reverse();
-
-  for (const entry of chromiumEntries) {
-    const root = path.join(cacheRoot, entry);
-    const candidates = [
-      path.join(root, "chrome-mac-arm64", "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"),
-      path.join(root, "chrome-mac", "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"),
-      path.join(root, "chrome-mac-arm64", "Chromium.app", "Contents", "MacOS", "Chromium"),
-      path.join(root, "chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium")
-    ];
-
-    for (const candidate of candidates) {
-      if (await fileExists(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  return null;
 }
 
 async function chromeExecutablePath() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
   const playwrightPath = await playwrightChromiumExecutablePath();
   if (playwrightPath) return playwrightPath;
-  return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+
+  const candidates = process.platform === "win32"
+    ? [
+        path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe"),
+        path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe"),
+        path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe")
+      ]
+    : ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"];
+
+  for (const candidate of candidates) {
+    if (candidate && await fileExists(candidate)) return candidate;
+  }
+
+  throw new Error("Chrome/Chromium executable was not found. Run npm run playwright:install or set CHROME_PATH.");
 }
 
 function log(event, fields = {}) {
@@ -142,7 +131,8 @@ async function main() {
   const executablePath = await chromeExecutablePath();
   const child = spawn(executablePath, args, {
     detached: true,
-    stdio: "ignore"
+    stdio: "ignore",
+    windowsHide: true
   });
   child.unref();
 

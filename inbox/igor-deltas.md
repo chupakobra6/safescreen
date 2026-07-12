@@ -73,3 +73,36 @@
 Статус:
 
 - Выполнено текущей правкой.
+
+## 2026-07-12
+
+### Полный Windows-подпроект
+
+Исходный ввод:
+
+```text
+Я реализую Windows-проект и автоматические тесты.
+Windows CI собирает готовый .exe/установщик.
+Друг запускает приложение и встроенный self-test.
+Делает один тест демонстрации полного экрана в Chrome или Edge.
+
+вот это все сделай как подпроект, пока без лишней такой диагностики, но нужно перенести проект фул для виндовс и корректно задокументировать чтобы у него агент разобрался что делать
+```
+
+Нормализация:
+
+- Добавить отдельный нативный Windows target без замены macOS-приложения.
+- Перенести browser, profile, sidebar window, resize, focus/input, fixed cursor, silent media,
+  modifier hotkeys и capture exclusion contract.
+- Windows capture exclusion должен использовать штатный `WDA_EXCLUDEFROMCAPTURE`, проверять exact
+  readback и завершаться fail-closed при ошибке.
+- Добавить переносимые unit-тесты, Windows self-test, CI, portable self-contained executable и
+  installer с WebView2 Runtime bootstrapper.
+- Оставить реальную проверку конкретной браузерной звонилки коротким ручным `Entire screen` smoke
+  test на целевой Windows-машине.
+- Добавить scoped-инструкции, чтобы другой агент мог собирать, проверять и исправлять Windows target
+  без восстановления контекста из переписки.
+
+Статус:
+
+- Выполнено текущей правкой.

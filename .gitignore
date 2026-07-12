@@ -9,7 +9,10 @@ build/
 DerivedData/
 dist/
 out/
+artifacts/
 node_modules/
+Windows/**/bin/
+Windows/**/obj/
 
 # Local captures, logs, and generated validation artifacts.
 captures/

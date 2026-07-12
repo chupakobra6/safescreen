@@ -1,0 +1,170 @@
+name: Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/windows.yml"
+      - "Windows/**"
+      - "Extensions/OverlayFocusGuard/**"
+      - "tools/e2e/**"
+      - "tools/extension/**"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - ".github/workflows/windows.yml"
+      - "Windows/**"
+      - "Extensions/OverlayFocusGuard/**"
+      - "tools/e2e/**"
+      - "tools/extension/**"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-package:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: "Windows/**/packages.lock.json"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Read application version
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content "Windows/Directory.Build.props"
+          $version = [string]$props.Project.PropertyGroup.VersionPrefix
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "VersionPrefix is missing from Windows/Directory.Build.props."
+          }
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore .NET projects
+        shell: pwsh
+        run: dotnet restore Windows/OverlayBrowser.Windows.sln --locked-mode
+
+      - name: Verify C# formatting
+        shell: pwsh
+        run: dotnet format Windows/OverlayBrowser.Windows.sln --verify-no-changes --no-restore
+
+      - name: Run portable Windows logic tests
+        shell: pwsh
+        run: dotnet test Windows/tests/OverlayBrowser.Windows.Tests/OverlayBrowser.Windows.Tests.csproj --configuration Release --no-restore --logger "console;verbosity=normal"
+
+      - name: Build Windows application
+        shell: pwsh
+        run: dotnet build Windows/OverlayBrowser.Windows.sln --configuration Release --no-restore
+
+      - name: Check extension and run extension E2E
+        shell: pwsh
+        run: |
+          npm ci
+          npm run check:extension
+          npx playwright install chromium
+          npm run e2e:extension
+
+      - name: Publish self-contained x64 executable
+        shell: pwsh
+        run: |
+          dotnet publish Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --no-restore `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            --output artifacts/portable
+          Remove-Item artifacts/portable/*.xml -ErrorAction SilentlyContinue
+
+      - name: Download and install WebView2 Evergreen Runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts/package | Out-Null
+          Invoke-WebRequest `
+            -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" `
+            -OutFile "artifacts/package/MicrosoftEdgeWebview2Setup.exe"
+          $runtime = Start-Process `
+            -FilePath "artifacts/package/MicrosoftEdgeWebview2Setup.exe" `
+            -ArgumentList "/silent", "/install" `
+            -Wait `
+            -PassThru
+          if ($runtime.ExitCode -ne 0) {
+            throw "WebView2 bootstrapper failed with exit code $($runtime.ExitCode)."
+          }
+
+      - name: Run published application self-test
+        shell: pwsh
+        run: |
+          $selfTest = Start-Process `
+            -FilePath "artifacts/portable/OverlayBrowser.Windows.exe" `
+            -ArgumentList "--self-test" `
+            -Wait `
+            -PassThru
+          $logPath = Join-Path $env:LOCALAPPDATA "OverlayBrowser/logs/overlay-browser.log"
+          if (Test-Path $logPath) {
+            Get-Content $logPath
+          }
+          if ($selfTest.ExitCode -ne 0) {
+            throw "Overlay Browser self-test failed with exit code $($selfTest.ExitCode)."
+          }
+
+      - name: Build portable ZIP
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/portable/* -DestinationPath artifacts/OverlayBrowser-Windows-x64.zip -Force
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress --yes
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6/ISCC.exe"
+          $sourceDir = (Resolve-Path "artifacts/portable").Path
+          $bootstrapper = (Resolve-Path "artifacts/package/MicrosoftEdgeWebview2Setup.exe").Path
+          $outputDir = (Resolve-Path "artifacts").Path
+          & $iscc `
+            "/DSourceDir=$sourceDir" `
+            "/DBootstrapperPath=$bootstrapper" `
+            "/DOutputDir=$outputDir" `
+            "/DAppVersion=$env:APP_VERSION" `
+            "Windows/installer/OverlayBrowser.Windows.iss"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: OverlayBrowser-Windows-x64
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/OverlayBrowser-Windows-x64.zip
+            artifacts/OverlayBrowser-Windows-x64-Setup.exe
+            logs/e2e-*.json
+            logs/e2e-*.log

@@ -529,8 +529,17 @@ key(kVK_Command, false)
   await mustRun("swift", ["-e", script], { env: { OVERLAY_PID: String(pid), PASTE_TEXT: text } });
 }
 
-async function testSwiftAndExtensionSyntax() {
-  await mustRun("swift", ["test"]);
+async function testUnitAndExtensionSyntax() {
+  if (process.platform === "darwin") {
+    await mustRun("swift", ["test"]);
+  } else if (process.platform === "win32") {
+    await mustRun("dotnet", [
+      "test",
+      "Windows/tests/OverlayBrowser.Windows.Tests/OverlayBrowser.Windows.Tests.csproj",
+      "--configuration",
+      "Release"
+    ]);
+  }
   await mustRun("node", ["--check", "Extensions/OverlayFocusGuard/page-guard.js"]);
   await mustRun("node", ["--check", "Extensions/OverlayFocusGuard/content.js"]);
   await mustRun("node", ["--check", "Extensions/OverlayFocusGuard/popup.js"]);
@@ -805,7 +814,7 @@ async function main() {
   reporter.log(`local server ${server.origin}`);
 
   try {
-    await reporter.step("unit-and-extension-syntax", testSwiftAndExtensionSyntax);
+    await reporter.step("unit-and-extension-syntax", testUnitAndExtensionSyntax);
     if (options.app) {
       await reporter.step("overlay-smoke-and-privacy", testOverlaySmoke);
       await reporter.step("overlay-modifier-hotkeys", () => testModifierHotKeys(server));

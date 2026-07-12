@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OverlayBrowser.Windows.Core", "src\OverlayBrowser.Windows.Core\OverlayBrowser.Windows.Core.csproj", "{BC325A98-7BE0-4B4B-898F-2B8885C60301}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OverlayBrowser.Windows", "src\OverlayBrowser.Windows\OverlayBrowser.Windows.csproj", "{7CDDE02C-E5F1-42C1-9A5F-6151B727AF27}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OverlayBrowser.Windows.Tests", "tests\OverlayBrowser.Windows.Tests\OverlayBrowser.Windows.Tests.csproj", "{2D4ECDF8-9A22-4ED3-A31A-819C22D84BBC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BC325A98-7BE0-4B4B-898F-2B8885C60301}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC325A98-7BE0-4B4B-898F-2B8885C60301}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC325A98-7BE0-4B4B-898F-2B8885C60301}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC325A98-7BE0-4B4B-898F-2B8885C60301}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7CDDE02C-E5F1-42C1-9A5F-6151B727AF27}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7CDDE02C-E5F1-42C1-9A5F-6151B727AF27}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7CDDE02C-E5F1-42C1-9A5F-6151B727AF27}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7CDDE02C-E5F1-42C1-9A5F-6151B727AF27}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2D4ECDF8-9A22-4ED3-A31A-819C22D84BBC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2D4ECDF8-9A22-4ED3-A31A-819C22D84BBC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2D4ECDF8-9A22-4ED3-A31A-819C22D84BBC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2D4ECDF8-9A22-4ED3-A31A-819C22D84BBC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

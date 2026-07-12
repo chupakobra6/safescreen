@@ -1,14 +1,14 @@
 # Ранбук Overlay Browser
 
-Назначение: хранить команды запуска, сборки, проверки и ручные сценарии для текущего приложения
+Назначение: хранить команды запуска, сборки, проверки и ручные сценарии для текущих приложений
 Overlay Browser.
 
 ## Среда
 
-- Рабочая директория: `/Users/igor/projects/safescreen`.
-- Кодовый путь: SwiftPM через Command Line Tools, без обязательного Xcode GUI.
-- Минимальная платформа пакета: macOS 14.
-- Основной executable product: `OverlayBrowser`.
+- macOS working directory: `/Users/igor/projects/safescreen`; SwiftPM через Command Line Tools, без
+  обязательного Xcode GUI; минимальная платформа macOS 14; executable `OverlayBrowser`.
+- Windows working directory: корень checkout репозитория; .NET 10 CLI и PowerShell без обязательного
+  Visual Studio GUI; минимальная версия Windows `10.0.19041`; executable `OverlayBrowser.Windows`.
 
 Проверить окружение:
 
@@ -161,6 +161,146 @@ trust для процесса, который отправляет синтет�
 
 Команды tooling для extension пишут в stdout с префиксом `[OverlayFocusGuardTools]`.
 
+Windows-приложение пишет тот же key-value формат в файл:
+
+```text
+%LOCALAPPDATA%\OverlayBrowser\logs\overlay-browser.log
+```
+
+## Windows: запуск и проверка
+
+Проверить среду из PowerShell в корне checkout:
+
+```powershell
+dotnet --version
+$PSVersionTable.PSVersion
+```
+
+SDK выбирается через `Windows/global.json`; требуется .NET 10 SDK. Восстановить locked NuGet graph:
+
+```powershell
+dotnet restore Windows/OverlayBrowser.Windows.sln --locked-mode
+```
+
+Запустить переносимые unit-тесты:
+
+```powershell
+dotnet test Windows/tests/OverlayBrowser.Windows.Tests/OverlayBrowser.Windows.Tests.csproj `
+  --configuration Release `
+  --no-restore
+```
+
+Проверить format/analyzers и собрать весь solution:
+
+```powershell
+dotnet format Windows/OverlayBrowser.Windows.sln --verify-no-changes --no-restore
+dotnet build Windows/OverlayBrowser.Windows.sln --configuration Release --no-restore
+```
+
+Запустить Windows-приложение из исходников с ChatGPT по умолчанию:
+
+```powershell
+dotnet run --project Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj
+```
+
+Запустить с локальным или явным URL:
+
+```powershell
+dotnet run --project Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj -- `
+  http://127.0.0.1:8080/clipboard.html
+```
+
+Ожидаемое runtime-поведение:
+
+- client size `420x820`, старт справа, обычный resizable window;
+- показ не меняет foreground focus;
+- `Left Alt+Left Shift` и `Right Alt+Right Shift` сразу показывают/скрывают окно;
+- явный клик внутри разрешает WebView2 input, нативный `Ctrl+V` вставляет содержимое один раз;
+- `Escape` возвращает focus предыдущему foreground window;
+- close button скрывает окно, tray `Exit` завершает процесс;
+- повторный запуск не создает второе окно, а показывает существующее без активации;
+- страницы не издают звук, cursor внутри страницы и address field остается arrow;
+- startup прекращается с ошибкой, если affinity `0x00000011` не установился и не прочитался обратно.
+
+## Windows: publish и self-test
+
+Собрать self-contained single-file executable:
+
+```powershell
+dotnet publish Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
+  --configuration Release `
+  --runtime win-x64 `
+  --self-contained true `
+  --no-restore `
+  -p:PublishSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:DebugType=None `
+  -p:DebugSymbols=false `
+  --output artifacts/portable
+
+Remove-Item artifacts/portable/*.xml -ErrorAction SilentlyContinue
+```
+
+Запустить built-in self-test опубликованного приложения:
+
+```powershell
+.\artifacts\portable\OverlayBrowser.Windows.exe --self-test
+```
+
+Обязательные проверки:
+
+```text
+[PASS] windows-version
+[PASS] webview2-runtime
+[PASS] url-policy
+[PASS] window-capture-exclusion: ... affinity=0x00000011 error=0
+Self-test passed.
+```
+
+Self-test возвращает exit code `1` при любой ошибке. Он проверяет реальный Win32 top-level HWND и
+WebView2 Runtime, но не симулирует конкретную браузерную звонилку.
+
+## Windows: CI и installer
+
+Workflow `.github/workflows/windows.yml` на `windows-latest` выполняет:
+
+- locked restore, format, unit tests и полный solution build;
+- extension syntax и Playwright E2E с per-origin persistence;
+- self-contained `win-x64` publish;
+- установку официального WebView2 Evergreen Runtime и published `--self-test`;
+- portable `OverlayBrowser-Windows-x64.zip`;
+- unsigned Inno Setup `OverlayBrowser-Windows-x64-Setup.exe`, который включает официальный
+  WebView2 bootstrapper.
+
+Запустить workflow вручную после публикации репозитория на GitHub:
+
+```powershell
+gh workflow run Windows
+gh run watch
+```
+
+Скачать готовые artifacts последнего успешного run:
+
+```powershell
+gh run download --name OverlayBrowser-Windows-x64
+```
+
+Локальная сборка installer повторяет шаг `Build installer` из workflow и требует Inno Setup 6.
+Источник installer contract: `Windows/installer/OverlayBrowser.Windows.iss`.
+
+## Windows: ручной screen-share smoke test
+
+После успешного self-test один раз выполнить сценарий из
+[../Windows/README.md](../Windows/README.md#обязательный-ручной-screen-share-smoke-test) на целевой
+Windows-машине в используемой звонилке Chrome/Edge. Проверять нужно именно `Entire screen`, потому
+что share отдельной вкладки по определению не включает native overlay.
+
+Если overlay попал в capture, использовать его в звонке нельзя: зафиксировать версии Windows,
+Chrome/Edge и звонилки, приложить `%LOCALAPPDATA%\OverlayBrowser\logs\overlay-browser.log` и передать
+агенту.
+
+## Общие проверки репозитория
+
 Проверить стиль diff перед коммитом:
 
 ```bash
@@ -218,7 +358,9 @@ pgrep -fl OverlayBrowser || true
 1. Открыть `chrome://extensions`.
 2. Включить Developer mode.
 3. Нажать Load unpacked.
-4. Выбрать папку `/Users/igor/projects/safescreen/Extensions/OverlayFocusGuard`.
+4. Выбрать папку `Extensions/OverlayFocusGuard` из checkout репозитория. На текущем Mac это
+   `/Users/igor/projects/safescreen/Extensions/OverlayFocusGuard`; на Windows -
+   `<checkout>\Extensions\OverlayFocusGuard`.
 
 Использование:
 

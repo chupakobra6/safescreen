@@ -11,10 +11,15 @@
 
 ## Текущая форма
 
-Overlay Browser - нативное macOS-приложение на SwiftPM, AppKit и WebKit для внутреннего
-использования компании. Приложение открывает веб-страницы во встроенном `WKWebView`, хранит
-браузерные данные в постоянном WebKit-профиле и предоставляет управляемую оболочку окна поверх
-обычных desktop-приложений.
+Overlay Browser состоит из двух нативных desktop-приложений с одним поведенческим контрактом:
+
+- macOS-приложение на SwiftPM, AppKit и WebKit;
+- Windows-приложение на C#/.NET 10, WinForms, WebView2 и Win32.
+
+Оба приложения открывают веб-страницы во встроенном браузере, хранят website data в постоянном
+профиле и предоставляют управляемое topmost-окно поверх обычных desktop-приложений. Платформенные
+shell не используют общий runtime-код: переносимая логика Windows вынесена в отдельную
+`OverlayBrowser.Windows.Core`, а общий продуктовый контракт защищается тестами и документацией.
 
 В репозитории также есть companion extension `OverlayFocusGuard` для основного Chrome/Chromium
 браузера. Оно не является частью overlay window: расширение нужно для сайтов, которые должны
@@ -44,15 +49,31 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 - структурированное логирование overlay app, extension и extension tooling;
 - E2E-runner с локальными тестовыми страницами для app, hotkeys, paste, focus guard,
   per-origin persistence, extension reload и screen-share privacy sample;
-- стартовая HTML-страница как fallback для невалидного явного URL.
+- стартовая HTML-страница как fallback для невалидного явного URL;
+- executable product `OverlayBrowser.Windows` в отдельном `Windows/` подпроекте;
+- WinForms/WebView2 shell с теми же navigation controls, ChatGPT по умолчанию, постоянным профилем,
+  fixed cursor, silent media policy, resizable sidebar `420x820` и нативным `Ctrl+V`;
+- показ Windows-окна без активации через `SW_SHOWNOACTIVATE`/`SWP_NOACTIVATE`, input mode по явному
+  клику и возврат предыдущего foreground focus по `Escape`;
+- capture exclusion Windows через `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` с обязательным
+  readback `GetWindowDisplayAffinity == 0x00000011` и fail-closed startup;
+- modifier-only Windows hotkeys `Left Alt+Left Shift` и `Right Alt+Right Shift` через
+  `WH_KEYBOARD_LL`, без подавления исходных клавиатурных событий;
+- Windows single-instance coordination, tray lifecycle, file logging и встроенный `--self-test`;
+- Windows CI с unit tests, extension E2E, self-contained `win-x64` executable, portable ZIP и Inno
+  Setup installer с WebView2 Evergreen bootstrapper.
 
 Не реализовано:
 
 - слой расширенного DOM-control;
 - профильная UI-настройка политик для доменов;
 - хранилище пользовательских правил DOM-control;
-- сборка `.app`, подпись и дистрибуция вне SwiftPM.
-- публикация `OverlayFocusGuard` в Chrome Web Store.
+- сборка `.app`, подпись и дистрибуция вне SwiftPM;
+- публикация `OverlayFocusGuard` в Chrome Web Store;
+- подпись Windows executable/installer доверенным code-signing сертификатом;
+- полностью автоматизированная проверка пикселей реальной демонстрации экрана Windows в конкретной
+  браузерной звонилке: Windows self-test проверяет системный affinity contract, а финальный capture
+  path пока требует один ручной smoke test на целевой машине.
 
 ## Модули
 
@@ -61,12 +82,17 @@ Overlay Browser - нативное macOS-приложение на SwiftPM, AppK
 | `OverlayBrowser` | AppKit shell: lifecycle, окно, hotkey, адресная строка, навигация `WKWebView`. |
 | `OverlayBrowserCore` | Тестируемая логика без AppKit/WebKit shell: стартовая страница, парсинг URL, стартовый destination. |
 | `OverlayBrowserWebKit` | Конфигурация WebKit-профиля и фабрика `WKWebViewConfiguration`. |
+| `Windows/src/OverlayBrowser.Windows.Core` | Переносимая логика Windows: URL, start destination, hotkey state machine и browser scripts. |
+| `Windows/src/OverlayBrowser.Windows` | WinForms/WebView2 shell, Win32 privacy/focus/hotkey, lifecycle, logging и self-test. |
+| `Windows/tests/OverlayBrowser.Windows.Tests` | Unit-тесты Windows Core, запускаемые и на macOS, и на Windows. |
+| `Windows/installer` | Inno Setup contract для per-user installer и WebView2 bootstrapper. |
 | `Extensions/OverlayFocusGuard` | Локальное Chrome/Chromium MV3-расширение для per-origin focus/visibility guard в основном браузере. |
 | `tools/e2e` | Node E2E-runner: локальные HTML-страницы, запуск overlay, Chrome/Playwright проверки и отчеты в `logs/`. |
 | `tools/extension` | CLI-инструменты для запуска dev Chrome profile и reload локального unpacked extension без `chrome://extensions`. |
 | `OverlayBrowserCoreTests` | Тесты URL-нормализации и стартовой страницы. |
 | `OverlayBrowserWebKitTests` | Тесты persistent `WKWebsiteDataStore` и стабильного идентификатора профиля. |
 | `OverlayFocusGuardExtensionTests` | Тесты manifest и ключевых инвариантов browser extension. |
+| `.github/workflows/windows.yml` | Windows build/test/package pipeline и готовые CI artifacts. |
 
 ## Runtime-поток
 
@@ -89,15 +115,37 @@ WKWebViewConfiguration from BrowserProfile
 WKWebView
 ```
 
+Windows runtime-поток:
+
+```text
+command-line arguments
+        |
+        v
+AppOptions + UrlPolicy
+        |
+        v
+BrowserForm
+        |
+        +--> WindowPrivacy + HotKeyController + SingleInstanceCoordinator
+        |
+        v
+CoreWebView2Environment with persistent user data folder
+        |
+        v
+WebView2
+```
+
 Запуск с URL:
 
-- `URLArgumentParser` берет первый значимый аргумент после имени процесса;
+- macOS `URLArgumentParser` и Windows `UrlPolicy` берут первый значимый URL-аргумент;
 - URL без схемы нормализуется в `https://...`;
 - разрешены только `http` и `https`;
 - отсутствующий URL открывает `https://chatgpt.com/`;
 - невалидный URL открывает встроенную стартовую страницу.
 
-## WebKit-профиль
+## Браузерные профили
+
+### macOS WebKit
 
 `BrowserProfile` создает `WKWebViewConfiguration` с одним повторно используемым
 `WKWebsiteDataStore` и отдельным `WKUserContentController`.
@@ -123,7 +171,27 @@ WKWebView
 `WKWebView`, но hover не должен менять системный указатель на I-beam или hand, а страницы не должны
 издавать звук через обычные `audio`/`video` media пути.
 
+### Windows WebView2
+
+`BrowserForm` создает `CoreWebView2Environment` с user data folder
+`%LOCALAPPDATA%\OverlayBrowser\WebView2`. Папка постоянная и хранит cookie, login, local storage,
+IndexedDB, permissions и другие данные WebView2 между перезапусками.
+
+До первой навигации shell ожидает установку трех scripts через
+`AddScriptToExecuteOnDocumentCreatedAsync`; WebView2 применяет их к будущим top-level и child-frame
+navigations:
+
+- fixed cursor policy совпадает с базовым CSS-контрактом macOS;
+- silent media policy глушит `audio`/`video`;
+- escape bridge передает `Escape` в host через `chrome.webview.postMessage`.
+
+Кроме script policy, `CoreWebView2.IsMuted = true` выключает весь audio output WebView2, а environment
+получает Chromium argument `--autoplay-policy=user-gesture-required`. Обычный Windows `Ctrl+V` не
+перехватывается host-кодом и передается focused WebView2 element нативно.
+
 ## Окно и input mode
+
+### macOS
 
 `BrowserPanel` создается как floating `NSPanel`. По умолчанию он не становится key window. Это
 оставляет чтение и скролл отделенными от клавиаточного ввода.
@@ -154,6 +222,27 @@ event, чтобы не было двойной вставки. `Control+V` не 
 Ошибки provisional navigation логируются в stderr и показываются как простая HTML-страница ошибки,
 чтобы не оставлять пользователя с пустым окном без причины.
 
+### Windows
+
+`BrowserForm` - resizable topmost WinForms window без taskbar button. `ShowWithoutActivation`,
+`ShowWindow(SW_SHOWNOACTIVATE)` и `SetWindowPos(..., SWP_NOACTIVATE)` используются при первом показе,
+hotkey и повторном запуске приложения. Постоянный `WS_EX_NOACTIVATE` не используется: Windows не
+сможет доставлять обычный текстовый ввод в WebView2, если top-level window никогда не активируется.
+
+Перед `WM_MOUSEACTIVATE` shell запоминает текущий foreground HWND. Явный клик пользователя активирует
+overlay и разрешает ввод; `Escape` очищает input mode и вызывает `SetForegroundWindow` для
+запомненного HWND. Показ без клика не меняет foreground focus. Hotkey напрямую проверяет `Visible` и
+скрывает окно с первого срабатывания даже во время input mode.
+
+Capture privacy применяется только к собственному top-level HWND. `WindowPrivacy` проверяет Windows
+10 build `19041+`, DWM composition, успешный `SetWindowDisplayAffinity` и exact readback
+`0x00000011`. Любая ошибка приводит к fail-closed dialog и завершению вместо запуска незащищенного
+overlay.
+
+Глобальный low-level keyboard hook отслеживает левую и правую стороны отдельно, защелкивает одно
+срабатывание до отпускания пары и всегда вызывает `CallNextHookEx`. Он не скрывает ввод от Windows,
+звонков, игр или других процессов.
+
 ## Логирование и E2E
 
 Overlay app пишет стабильный key-value формат в `stderr` с префиксом `[OverlayBrowser]`.
@@ -174,6 +263,12 @@ Overlay app пишет стабильный key-value формат в `stderr` �
 
 Runner пишет machine-readable отчет в `logs/e2e-*.json` и текстовый лог в `logs/e2e-*.log`.
 Шаги, заблокированные системными разрешениями macOS/Chrome, помечаются как `blocked`.
+
+Windows Core unit tests запускаются на любой платформе с .NET 10. На Windows опубликованный executable
+дополнительно запускается с `--self-test`: проверяются версия OS, наличие WebView2 Runtime, URL policy
+и реальный top-level HWND affinity readback. GitHub Actions выполняет эти проверки, extension E2E и
+собирает portable/installer artifacts. Self-test не подменяет ручную проверку browser screen share,
+потому что конкретная звонилка может выбирать собственный capture path.
 
 ## DOM-Control Слой
 
@@ -228,9 +323,12 @@ blur/hidden events; при выключении остаются инертны�
 
 ## Технические ограничения
 
-- Базовый runtime - WebKit, не Chromium.
-- Минимальная платформа SwiftPM package - macOS 14.
-- Основной workflow - Command Line Tools и SwiftPM.
-- UI создается кодом AppKit; Xcode project в репозитории отсутствует.
+- Базовый runtime macOS - WebKit; базовый runtime Windows - WebView2 Evergreen.
+- Минимальная платформа SwiftPM package - macOS 14; Windows target - Windows 10 version 2004
+  (`10.0.19041`) или новее.
+- Основной workflow macOS - Command Line Tools и SwiftPM; Windows - .NET CLI и PowerShell.
+- UI создается кодом AppKit/WinForms; Xcode и Visual Studio projects для GUI workflow не требуются.
+- Windows code можно cross-build/publish на macOS, но Win32 focus/capture contract проверяется только
+  Windows self-test и ручным screen-share smoke test.
 - Документация описывает технические свойства текущего приложения и ближайшие технические точки
   расширения, без исторических продуктовых сценариев.
