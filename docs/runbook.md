@@ -82,6 +82,27 @@ cd /Users/igor/projects/safescreen
 swift test
 ```
 
+Собрать переносимый универсальный `.app` и ZIP-архив для Apple Silicon и Intel:
+
+```bash
+cd /Users/igor/projects/safescreen
+tools/macos/package-portable.sh
+```
+
+Скрипт собирает обе архитектуры с минимальной платформой macOS 14, объединяет их в один бинарник,
+формирует стандартный app bundle, выполняет ad-hoc подпись и пишет архив в `dist/`. Доверенная
+подпись Apple Developer ID и notarization требуют отдельного сертификата и профиля Apple; без них
+после скачивания получатель может один раз подтвердить запуск через правый клик -> `Открыть`.
+
+Проверить готовый app bundle:
+
+```bash
+app="dist/$(find dist -maxdepth 1 -type d -name 'OverlayBrowser-macOS-universal-*' -exec basename {} \; | sort | tail -1)/Overlay Browser.app"
+codesign --verify --deep --strict --verbose=2 "$app"
+lipo -archs "$app/Contents/MacOS/OverlayBrowser"
+plutil -p "$app/Contents/Info.plist"
+```
+
 Проверить browser extension:
 
 ```bash

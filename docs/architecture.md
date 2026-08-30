@@ -68,7 +68,7 @@ shell не используют общий runtime-код: переносима�
 - слой расширенного DOM-control;
 - профильная UI-настройка политик для доменов;
 - хранилище пользовательских правил DOM-control;
-- сборка `.app`, подпись и дистрибуция вне SwiftPM;
+- доверенная подпись Apple Developer ID и notarization macOS-сборки;
 - публикация `OverlayFocusGuard` в Chrome Web Store;
 - подпись Windows executable/installer доверенным code-signing сертификатом;
 - полностью автоматизированная проверка пикселей реальной демонстрации экрана Windows в конкретной
@@ -86,6 +86,7 @@ shell не используют общий runtime-код: переносима�
 | `Windows/src/OverlayBrowser.Windows` | WinForms/WebView2 shell, Win32 privacy/focus/hotkey, lifecycle, logging и self-test. |
 | `Windows/tests/OverlayBrowser.Windows.Tests` | Unit-тесты Windows Core, запускаемые и на macOS, и на Windows. |
 | `Windows/installer` | Inno Setup contract для per-user installer и WebView2 bootstrapper. |
+| `Packaging/macOS` | Метаданные app bundle и инструкция получателю переносимого macOS-архива. |
 | `Extensions/OverlayFocusGuard` | Локальное Chrome/Chromium MV3-расширение для per-origin focus/visibility guard в основном браузере. |
 | `tools/e2e` | Node E2E-runner: локальные HTML-страницы, запуск overlay, Chrome/Playwright проверки и отчеты в `logs/`. |
 | `tools/extension` | CLI-инструменты для запуска dev Chrome profile и reload локального unpacked extension без `chrome://extensions`. |
@@ -93,6 +94,11 @@ shell не используют общий runtime-код: переносима�
 | `OverlayBrowserWebKitTests` | Тесты persistent `WKWebsiteDataStore` и стабильного идентификатора профиля. |
 | `OverlayFocusGuardExtensionTests` | Тесты manifest и ключевых инвариантов browser extension. |
 | `.github/workflows/windows.yml` | Windows build/test/package pipeline и готовые CI artifacts. |
+
+`tools/macos/package-portable.sh` собирает release-бинарники `arm64` и `x86_64` с минимальной
+платформой macOS 14, объединяет их в универсальный `Overlay Browser.app`, выполняет ad-hoc подпись
+и упаковывает переносимый ZIP. Такая сборка самодостаточна относительно Swift toolchain, но без
+Apple Developer ID и notarization получатель может увидеть одноразовое предупреждение Gatekeeper.
 
 ## Runtime-поток
 
