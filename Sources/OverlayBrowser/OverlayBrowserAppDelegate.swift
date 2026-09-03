@@ -1,6 +1,7 @@
 import AppKit
 import Carbon
 import OverlayBrowserCore
+import OverlayBrowserWebKit
 
 final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     private let arguments: [String]
@@ -22,6 +23,9 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLog.info(.app, "launch", ["arguments": arguments.dropFirst().joined(separator: " ")])
         NSApp.setActivationPolicy(.accessory)
+        guard prepareBrowserProfile() else {
+            return
+        }
         setupBrowserPanel()
         setupHotKey()
         setupKeyDownMonitor()
@@ -58,6 +62,37 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         panel.setInputMode(false)
         showBrowserPanel()
         AppLog.info(.app, "ready")
+    }
+
+    private func prepareBrowserProfile() -> Bool {
+        do {
+            switch try BrowserProfile.migrateLegacyProfileIfNeeded() {
+            case .notCanonicalBundle:
+                AppLog.info(.profile, "migration-skipped-noncanonical-bundle")
+            case .noLegacyProfile:
+                AppLog.info(.profile, "legacy-profile-not-found")
+            case .alreadyCompleted:
+                AppLog.info(.profile, "migration-already-completed")
+            case .migrated(let backupURL):
+                var fields = ["source": "legacy-overlaybrowser"]
+                if let backupURL {
+                    fields["backup"] = backupURL.path
+                }
+                AppLog.info(.profile, "migration-completed", fields)
+            }
+            return true
+        } catch {
+            AppLog.error(.profile, "migration-failed", ["description": error.localizedDescription])
+            let alert = NSAlert()
+            alert.alertStyle = .critical
+            alert.messageText = "Не удалось открыть профиль браузера"
+            alert.informativeText = "Приложение остановлено, чтобы не создать новый пустой профиль. \(error.localizedDescription)"
+            alert.addButton(withTitle: "Закрыть")
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+            NSApp.terminate(nil)
+            return false
+        }
     }
 
     private func setupHotKey() {

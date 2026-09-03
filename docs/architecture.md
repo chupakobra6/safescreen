@@ -28,10 +28,14 @@ shell не используют общий runtime-код: переносима�
 Реализовано:
 
 - executable product `OverlayBrowser`;
-- встроенный `WKWebView` с адресной строкой, back/forward/reload, дефолтным URL
-  `https://chatgpt.com/` и URL из CLI-аргумента;
+- две встроенные вкладки `WKWebView` с общими address/back/forward/reload controls: активная при
+  старте ChatGPT и фоновая Google AI Studio;
 - постоянный WebKit-профиль через `WKWebsiteDataStore(forIdentifier:)`;
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
+- одноразовая миграция legacy-профиля SwiftPM-запуска в канонический bundle-профиль с резервной
+  копией ранее созданного destination-профиля;
+- внутренний session banner, когда ChatGPT API подтверждает отсутствие активной сессии или AI
+  Studio перенаправляет вкладку на Google Accounts;
 - `NSPanel` с `.nonactivatingPanel`, `level = .floating`,
   `sharingType = .none`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`;
 - непрозрачное читаемое окно по умолчанию с content size `420x820` и стартовой позицией справа как
@@ -47,8 +51,9 @@ shell не используют общий runtime-код: переносима�
   `audio`/`video` и отсутствие native beep при ошибке адреса;
 - локальное MV3-расширение `OverlayFocusGuard` с ручным per-origin toggle для основного браузера;
 - структурированное логирование overlay app, extension и extension tooling;
-- E2E-runner с локальными тестовыми страницами для app, hotkeys, paste, focus guard,
-  per-origin persistence, extension reload и screen-share privacy sample;
+- E2E-runner с изолированным app/profile, локальными страницами для app, hotkeys, paste,
+  cookie/localStorage persistence после рестарта, focus guard, extension reload и screen-share
+  privacy sample;
 - стартовая HTML-страница как fallback для невалидного явного URL;
 - executable product `OverlayBrowser.Windows` в отдельном `Windows/` подпроекте;
 - WinForms/WebView2 shell с теми же navigation controls, ChatGPT по умолчанию, постоянным профилем,
@@ -79,9 +84,9 @@ shell не используют общий runtime-код: переносима�
 
 | Модуль | Ответственность |
 | --- | --- |
-| `OverlayBrowser` | AppKit shell: lifecycle, окно, hotkey, адресная строка, навигация `WKWebView`. |
-| `OverlayBrowserCore` | Тестируемая логика без AppKit/WebKit shell: стартовая страница, парсинг URL, стартовый destination. |
-| `OverlayBrowserWebKit` | Конфигурация WebKit-профиля и фабрика `WKWebViewConfiguration`. |
+| `OverlayBrowser` | AppKit shell: lifecycle, окно, hotkey, две вкладки, session banner и навигация `WKWebView`. |
+| `OverlayBrowserCore` | Тестируемая логика без AppKit/WebKit shell: URL, вкладки и классификация session state. |
+| `OverlayBrowserWebKit` | Конфигурация WebKit-профиля, миграция legacy-данных и фабрика `WKWebViewConfiguration`. |
 | `Windows/src/OverlayBrowser.Windows.Core` | Переносимая логика Windows: URL, start destination, hotkey state machine и browser scripts. |
 | `Windows/src/OverlayBrowser.Windows` | WinForms/WebView2 shell, Win32 privacy/focus/hotkey, lifecycle, logging и self-test. |
 | `Windows/tests/OverlayBrowser.Windows.Tests` | Unit-тесты Windows Core, запускаемые и на macOS, и на Windows. |
@@ -91,7 +96,7 @@ shell не используют общий runtime-код: переносима�
 | `tools/e2e` | Node E2E-runner: локальные HTML-страницы, запуск overlay, Chrome/Playwright проверки и отчеты в `logs/`. |
 | `tools/extension` | CLI-инструменты для запуска dev Chrome profile и reload локального unpacked extension без `chrome://extensions`. |
 | `OverlayBrowserCoreTests` | Тесты URL-нормализации и стартовой страницы. |
-| `OverlayBrowserWebKitTests` | Тесты persistent `WKWebsiteDataStore` и стабильного идентификатора профиля. |
+| `OverlayBrowserWebKitTests` | Тесты persistent data store, стабильного UUID и безопасной миграции профиля. |
 | `OverlayFocusGuardExtensionTests` | Тесты manifest и ключевых инвариантов browser extension. |
 | `.github/workflows/windows.yml` | Windows build/test/package pipeline и готовые CI artifacts. |
 
@@ -153,8 +158,8 @@ WebView2
 
 ### macOS WebKit
 
-`BrowserProfile` создает `WKWebViewConfiguration` с одним повторно используемым
-`WKWebsiteDataStore` и отдельным `WKUserContentController`.
+`BrowserProfile` создает конфигурации обеих вкладок с одним повторно используемым
+`WKWebsiteDataStore` и отдельным `WKUserContentController` для каждого `WKWebView`.
 
 Текущий идентификатор профиля:
 
@@ -162,9 +167,27 @@ WebView2
 4B801A03-C12C-4C5C-89CE-28D85E385B77
 ```
 
-Стабильный UUID нужен, чтобы WebKit возвращал один и тот же persistent data store между
-перезапусками приложения. Этот store хранит cookie, cache storage, local storage, IndexedDB и другие
-поддерживаемые типы website data.
+Стабильный UUID и стабильный bundle identifier `com.igor.safescreen.overlay-browser` вместе
+определяют persistent data store. WebKit дополнительно разделяет данные по identity приложения,
+поэтому прямой SwiftPM executable исторически писал в `~/Library/WebKit/OverlayBrowser`, а app
+bundle пишет в `~/Library/WebKit/com.igor.safescreen.overlay-browser`.
+
+Перед первым созданием `WKWebsiteDataStore` канонический app bundle один раз копирует legacy-профиль
+в bundle-профиль. Если destination уже существует, его резервная копия сохраняется в
+`~/Library/Application Support/OverlayBrowser/ProfileMigrations/ProfileBackups`. Маркер миграции не
+позволяет повторному запуску перезаписать более новые cookie. Не-канонические test/SwiftPM bundle
+identity миграцию не выполняют.
+
+Store хранит cookie, cache storage, local storage, IndexedDB и другие поддерживаемые типы website
+data. Обновление executable или app bundle не удаляет эти каталоги.
+
+`BrowserViewController` держит одновременно два `WKWebView`: ChatGPT активен при старте, AI Studio
+загружается во второй вкладке. Переключение не пересоздает web view, поэтому состояние страницы
+сохраняется. Login/OAuth navigation с `targetFrame == nil` открывается в текущем web view, а не
+теряется как неподдержанное popup-окно. После навигации ChatGPT сначала проверяет наличие видимых
+login controls, затем same-origin `/api/auth/session`; AI Studio считается требующим входа на
+`/welcome` и при редиректе на `accounts.google.com`. Session banner сообщает только об отсутствии
+активной сессии: клиент не может надежно отличить локальное истечение cookie от серверного logout.
 
 `WKUserContentController` добавляет два user scripts на `documentStart` во все frames:
 
@@ -252,7 +275,7 @@ overlay.
 ## Логирование и E2E
 
 Overlay app пишет стабильный key-value формат в `stderr` с префиксом `[OverlayBrowser]`.
-Логируемые категории: `app`, `window`, `hotkey`, `input`, `navigation`.
+Логируемые категории: `app`, `window`, `hotkey`, `input`, `navigation`, `profile`, `session`.
 
 `OverlayFocusGuard` пишет диагностические записи в Chrome DevTools console с префиксом
 `[OverlayFocusGuard]` и полями `component`/`event`. CLI-инструменты для расширения используют
@@ -261,14 +284,19 @@ Overlay app пишет стабильный key-value формат в `stderr` �
 `tools/e2e/run-e2e.mjs` поднимает локальный HTTP-сервер и предоставляет страницы:
 
 - `clipboard.html` - contenteditable target для проверки native `Command+V`;
+- `persistence.html` - запись и чтение persistent cookie/localStorage между двумя процессами app;
+- `popup.html`/`popup-target.html` - проверка открытия new-window navigation в текущей вкладке;
 - `focus.html` - страница с `blur`/`visibilitychange`/`pagehide`/`freeze` событиями для проверки
   `OverlayFocusGuard`;
 - `screen-share.html` - страница с `getDisplayMedia` и canvas sample для проверки, что overlay
   marker не попадает в screen-share capture;
 - `overlay-marker.html` - яркий overlay marker для privacy sample.
 
-Runner пишет machine-readable отчет в `logs/e2e-*.json` и текстовый лог в `logs/e2e-*.log`.
-Шаги, заблокированные системными разрешениями macOS/Chrome, помечаются как `blocked`.
+Для app-сценариев runner собирает временный bundle
+`com.igor.safescreen.overlay-browser.e2e`, использует отдельный WebKit-профиль и удаляет его после
+прогона. Реальный пользовательский профиль E2E не читает и не очищает. Runner пишет
+machine-readable отчет в `logs/e2e-*.json` и текстовый лог в `logs/e2e-*.log`. Шаги,
+заблокированные системными разрешениями macOS/Chrome, помечаются как `blocked`.
 
 Windows Core unit tests запускаются на любой платформе с .NET 10. На Windows опубликованный executable
 дополнительно запускается с `--self-test`: проверяются версия OS, наличие WebView2 Runtime, URL policy

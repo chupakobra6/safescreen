@@ -2,7 +2,7 @@
 
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,6 +12,15 @@ const repoRoot = path.resolve(__dirname, "../..");
 const extensionRoot = path.join(repoRoot, "Extensions", "OverlayFocusGuard");
 const stateRoot = path.join(repoRoot, ".state", "e2e");
 const logRoot = path.join(repoRoot, "logs");
+const overlayE2EBundleIdentifier = "com.igor.safescreen.overlay-browser.e2e";
+const overlayE2EApplication = path.join(stateRoot, "Overlay Browser E2E.app");
+const overlayE2EExecutable = path.join(overlayE2EApplication, "Contents", "MacOS", "OverlayBrowser");
+const overlayE2EProfile = path.join(
+  process.env.HOME,
+  "Library",
+  "WebKit",
+  overlayE2EBundleIdentifier
+);
 
 class BlockedError extends Error {
   constructor(message, details = {}) {
@@ -298,6 +307,67 @@ const pages = {
   </script>
 </body>
 </html>`,
+  "/persistence.html": `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Overlay Storage Persistence E2E</title>
+</head>
+<body>
+  <main>Storage persistence test</main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode") || "read";
+    const token = params.get("token") || "";
+    if (mode === "write") {
+      document.cookie = "overlay_e2e=" + encodeURIComponent(token) + "; Path=/; Max-Age=3600; SameSite=Lax";
+      localStorage.setItem("overlay_e2e", token);
+    }
+    fetch("/api/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        page: "persistence",
+        type: "state",
+        mode,
+        token,
+        cookie: document.cookie,
+        localStorageValue: localStorage.getItem("overlay_e2e")
+      })
+    }).catch(() => {});
+  </script>
+</body>
+</html>`,
+  "/popup.html": `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Overlay Popup Navigation E2E</title>
+</head>
+<body>
+  <a id="open" href="/popup-target.html" target="_blank">Open target</a>
+  <script>
+    window.addEventListener("load", () => document.getElementById("open").click());
+  </script>
+</body>
+</html>`,
+  "/popup-target.html": `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Overlay Popup Target E2E</title>
+</head>
+<body>
+  <main>Popup target loaded in current tab</main>
+  <script>
+    fetch("/api/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ page: "popup", type: "target-loaded" })
+    }).catch(() => {});
+  </script>
+</body>
+</html>`,
   "/screen-share.html": `<!doctype html>
 <html>
 <head>
@@ -388,7 +458,8 @@ async function waitForServerEvent(server, predicate, timeoutMs = 4000) {
 
 async function startOverlay(url) {
   await mustRun("swift", ["build"]);
-  const args = [path.join(repoRoot, ".build", "debug", "OverlayBrowser")];
+  await prepareOverlayE2EApplication();
+  const args = [overlayE2EExecutable];
   if (url) args.push(url);
   const child = spawn(args[0], args.slice(1), { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
   let stdout = "";
@@ -406,7 +477,13 @@ async function startOverlay(url) {
   child.stderr.on("data", (chunk) => {
     stderr += chunk;
   });
-  await sleep(1200);
+  try {
+    await waitForOverlayWindow(child.pid);
+  } catch (error) {
+    if (!closed && !child.killed) child.kill();
+    await closePromise;
+    throw new Error(`${error.message}\n${stderr}`);
+  }
   return {
     pid: child.pid,
     child,
@@ -416,6 +493,41 @@ async function startOverlay(url) {
       await closePromise;
     }
   };
+}
+
+async function waitForOverlayWindow(pid, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = { found: false };
+  while (Date.now() < deadline) {
+    latest = await windowInfo(pid);
+    if (latest.found) return latest;
+    await sleep(100);
+  }
+  throw new Error(`overlay window not ready for pid ${pid}: ${JSON.stringify(latest)}`);
+}
+
+async function prepareOverlayE2EApplication() {
+  const contents = path.join(overlayE2EApplication, "Contents");
+  const macOSDirectory = path.join(contents, "MacOS");
+  await rm(overlayE2EApplication, { recursive: true, force: true });
+  await mkdir(macOSDirectory, { recursive: true });
+  await copyFile(path.join(repoRoot, ".build", "debug", "OverlayBrowser"), overlayE2EExecutable);
+  await copyFile(path.join(repoRoot, "Packaging", "macOS", "Info.plist"), path.join(contents, "Info.plist"));
+  await mustRun("plutil", [
+    "-replace",
+    "CFBundleIdentifier",
+    "-string",
+    overlayE2EBundleIdentifier,
+    path.join(contents, "Info.plist")
+  ]);
+  await mustRun("plutil", [
+    "-replace",
+    "CFBundleDisplayName",
+    "-string",
+    "OverlayBrowser",
+    path.join(contents, "Info.plist")
+  ]);
+  await mustRun("codesign", ["--force", "--sign", "-", "--timestamp=none", overlayE2EApplication]);
 }
 
 async function windowInfo(pid) {
@@ -616,6 +728,59 @@ async function testOverlayPaste(server) {
   }
 }
 
+async function testOverlayStoragePersistence(server) {
+  const token = `overlay-e2e-storage-${Date.now()}`;
+  const writeURL = `${server.origin}/persistence.html?mode=write&token=${encodeURIComponent(token)}`;
+  const readURL = `${server.origin}/persistence.html?mode=read&token=${encodeURIComponent(token)}`;
+
+  let overlay = await startOverlay(writeURL);
+  try {
+    const writeEvent = await waitForServerEvent(
+      server,
+      (event) => event.page === "persistence" && event.mode === "write" && event.token === token,
+      5000
+    );
+    if (!writeEvent.cookie.includes(token) || writeEvent.localStorageValue !== token) {
+      throw new Error("test page did not write cookie and localStorage");
+    }
+    await sleep(500);
+  } finally {
+    await overlay.stop();
+  }
+
+  overlay = await startOverlay(readURL);
+  try {
+    const readEvent = await waitForServerEvent(
+      server,
+      (event) => event.page === "persistence" && event.mode === "read" && event.token === token,
+      5000
+    );
+    if (!readEvent.cookie.includes(token)) {
+      throw new Error("cookie did not persist across overlay restart");
+    }
+    if (readEvent.localStorageValue !== token) {
+      throw new Error("localStorage did not persist across overlay restart");
+    }
+    return { cookiePersisted: true, localStoragePersisted: true };
+  } finally {
+    await overlay.stop();
+  }
+}
+
+async function testOverlayPopupNavigation(server) {
+  const overlay = await startOverlay(`${server.origin}/popup.html`);
+  try {
+    await waitForServerEvent(
+      server,
+      (event) => event.page === "popup" && event.type === "target-loaded",
+      5000
+    );
+    return { openedInCurrentTab: true };
+  } finally {
+    await overlay.stop();
+  }
+}
+
 async function importPlaywright() {
   try {
     return await import("playwright");
@@ -808,17 +973,23 @@ async function testScreenSharePrivacy(server, keepChrome) {
 
 async function main() {
   const options = parseArgs();
+  const usesOverlayApplication = options.app || options.screenShare;
   const reporter = new Reporter();
   await mkdir(stateRoot, { recursive: true });
   const server = await startLocalServer();
   reporter.log(`local server ${server.origin}`);
 
   try {
+    if (usesOverlayApplication) {
+      await rm(overlayE2EProfile, { recursive: true, force: true });
+    }
     await reporter.step("unit-and-extension-syntax", testUnitAndExtensionSyntax);
     if (options.app) {
       await reporter.step("overlay-smoke-and-privacy", testOverlaySmoke);
       await reporter.step("overlay-modifier-hotkeys", () => testModifierHotKeys(server));
       await reporter.step("overlay-native-command-v-paste", () => testOverlayPaste(server));
+      await reporter.step("overlay-cookie-and-storage-persistence", () => testOverlayStoragePersistence(server));
+      await reporter.step("overlay-popup-navigation", () => testOverlayPopupNavigation(server));
     }
     if (options.extension) {
       await reporter.step("extension-focus-guard-persistence", () => testExtensionFocusPersistence(server, options.keepChrome));
@@ -831,6 +1002,10 @@ async function main() {
     }
   } finally {
     await server.close();
+    await rm(overlayE2EApplication, { recursive: true, force: true });
+    if (usesOverlayApplication) {
+      await rm(overlayE2EProfile, { recursive: true, force: true });
+    }
     await reporter.writeReports();
   }
 

@@ -3,13 +3,35 @@ import OverlayBrowserCore
 import OverlayBrowserWebKit
 import WebKit
 
-final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavigationDelegate {
+final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavigationDelegate, WKUIDelegate {
     var onInputModeChanged: ((Bool) -> Void)?
 
     private let initialDestination: StartDestination
     private var observations: [NSKeyValueObservation] = []
+    private var activeTab = BrowserServiceTab.chatGPT
+    private var sessionStates: [BrowserServiceTab: BrowserSessionState] = [
+        .chatGPT: .unknown,
+        .aiStudio: .unknown
+    ]
     private var isUpdatingAddress = false
     private var isInputMode = false
+
+    private lazy var sessionMonitor = BrowserSessionMonitor { [weak self] tab, state in
+        self?.setSessionState(state, for: tab)
+    }
+
+    private lazy var tabSelector: NSSegmentedControl = {
+        let control = NSSegmentedControl(
+            labels: BrowserServiceTab.allCases.map(\.title),
+            trackingMode: .selectOne,
+            target: self,
+            action: #selector(selectTab)
+        )
+        control.selectedSegment = BrowserServiceTab.chatGPT.rawValue
+        control.segmentStyle = .rounded
+        control.setAccessibilityLabel("Вкладки браузера")
+        return control
+    }()
 
     private lazy var backButton = NSButton(
         title: "Back",
@@ -45,17 +67,53 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         return field
     }()
 
-    private lazy var webView: FocusAwareWebView = {
+    private lazy var sessionBannerLabel: NSTextField = {
+        let label = NSTextField(wrappingLabelWithString: "")
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .labelColor
+        return label
+    }()
+
+    private lazy var sessionBanner: NSView = {
+        let banner = NSView()
+        banner.wantsLayer = true
+        banner.layer?.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.16).cgColor
+        banner.isHidden = true
+
+        sessionBannerLabel.translatesAutoresizingMaskIntoConstraints = false
+        banner.addSubview(sessionBannerLabel)
+        NSLayoutConstraint.activate([
+            sessionBannerLabel.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 10),
+            sessionBannerLabel.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -10),
+            sessionBannerLabel.topAnchor.constraint(equalTo: banner.topAnchor, constant: 7),
+            sessionBannerLabel.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -7)
+        ])
+        return banner
+    }()
+
+    private lazy var chatGPTWebView = makeWebView()
+    private lazy var aiStudioWebView = makeWebView()
+
+    private var allWebViews: [FocusAwareWebView] {
+        [chatGPTWebView, aiStudioWebView]
+    }
+
+    private var activeWebView: FocusAwareWebView {
+        webView(for: activeTab)
+    }
+
+    private func makeWebView() -> FocusAwareWebView {
         let configuration = BrowserProfile.makeWebViewConfiguration()
         let view = FocusAwareWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = self
+        view.uiDelegate = self
         view.allowsBackForwardNavigationGestures = true
         view.underPageBackgroundColor = .textBackgroundColor
         view.onInputIntent = { [weak self] in
             self?.enterInputMode()
         }
         return view
-    }()
+    }
 
     init(initialDestination: StartDestination) {
         self.initialDestination = initialDestination
@@ -75,7 +133,8 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         super.viewDidLoad()
         setupLayout()
         setupWebViewObservers()
-        loadInitialDestination()
+        loadInitialDestinations()
+        activateTab(.chatGPT)
         updateNavigationState()
     }
 
@@ -99,7 +158,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
 
         let pasteSelector = #selector(NSText.paste(_:))
         if NSApp.target(forAction: pasteSelector, to: nil, from: self) == nil {
-            window.makeFirstResponder(webView)
+            window.makeFirstResponder(activeWebView)
         }
 
         let pasted = NSApp.sendAction(pasteSelector, to: nil, from: self)
@@ -118,36 +177,61 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        updateAddressFromWebView()
-        updateNavigationState()
+        updateVisibleNavigationState(for: webView)
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         if let url = webView.url {
-            AppLog.info(.navigation, "start", ["url": url.absoluteString])
+            AppLog.info(.navigation, "start", navigationFields(for: webView, url: url))
         }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let url = webView.url {
-            AppLog.info(.navigation, "finish", ["url": url.absoluteString])
+            AppLog.info(.navigation, "finish", navigationFields(for: webView, url: url))
         }
-        updateAddressFromWebView()
-        updateNavigationState()
+        if let tab = tab(for: webView) {
+            sessionMonitor.refresh(tab: tab, webView: webView)
+        }
+        updateVisibleNavigationState(for: webView)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        writeNavigationError(error)
-        updateNavigationState()
+        writeNavigationError(error, webView: webView)
+        updateVisibleNavigationState(for: webView)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        writeNavigationError(error)
-        loadErrorPage(for: error)
-        updateNavigationState()
+        writeNavigationError(error, webView: webView)
+        loadErrorPage(for: error, in: webView)
+        updateVisibleNavigationState(for: webView)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        guard navigationAction.targetFrame == nil else {
+            return nil
+        }
+
+        AppLog.info(
+            .navigation,
+            "new-window-in-current-tab",
+            navigationFields(for: webView, url: navigationAction.request.url)
+        )
+        webView.load(navigationAction.request)
+        return nil
     }
 
     private func setupLayout() {
+        let tabBar = NSStackView(views: [tabSelector])
+        tabBar.orientation = .horizontal
+        tabBar.alignment = .centerY
+        tabBar.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 4, right: 8)
+
         let toolbar = NSStackView(views: [
             backButton,
             forwardButton,
@@ -157,48 +241,76 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         toolbar.orientation = .horizontal
         toolbar.alignment = .centerY
         toolbar.spacing = 8
-        toolbar.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        toolbar.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 8, right: 8)
 
-        [toolbar, webView].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview($0)
+        let webViewContainer = NSView()
+        allWebViews.forEach { webView in
+            webView.translatesAutoresizingMaskIntoConstraints = false
+            webViewContainer.addSubview(webView)
+            NSLayoutConstraint.activate([
+                webView.leadingAnchor.constraint(equalTo: webViewContainer.leadingAnchor),
+                webView.trailingAnchor.constraint(equalTo: webViewContainer.trailingAnchor),
+                webView.topAnchor.constraint(equalTo: webViewContainer.topAnchor),
+                webView.bottomAnchor.constraint(equalTo: webViewContainer.bottomAnchor)
+            ])
         }
+        aiStudioWebView.isHidden = true
+
+        let rootStack = NSStackView(views: [tabBar, toolbar, sessionBanner, webViewContainer])
+        rootStack.orientation = .vertical
+        rootStack.alignment = .leading
+        rootStack.distribution = .fill
+        rootStack.spacing = 0
+        rootStack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(rootStack)
 
         NSLayoutConstraint.activate([
-            toolbar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            toolbar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            toolbar.topAnchor.constraint(equalTo: view.topAnchor),
-
-            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            rootStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            rootStack.topAnchor.constraint(equalTo: view.topAnchor),
+            rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            tabBar.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            toolbar.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            sessionBanner.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            webViewContainer.widthAnchor.constraint(equalTo: rootStack.widthAnchor)
         ])
     }
 
     private func setupWebViewObservers() {
-        observations = [
-            webView.observe(\.canGoBack, options: [.initial, .new]) { [weak self] _, _ in
-                self?.updateNavigationState()
-            },
-            webView.observe(\.canGoForward, options: [.initial, .new]) { [weak self] _, _ in
-                self?.updateNavigationState()
-            },
-            webView.observe(\.url, options: [.new]) { [weak self] _, _ in
-                self?.updateAddressFromWebView()
-            }
-        ]
+        observations = allWebViews.flatMap { webView in
+            [
+                webView.observe(\.canGoBack, options: [.initial, .new]) { [weak self, weak webView] _, _ in
+                    guard let self, let webView else {
+                        return
+                    }
+                    self.updateVisibleNavigationState(for: webView)
+                },
+                webView.observe(\.canGoForward, options: [.initial, .new]) { [weak self, weak webView] _, _ in
+                    guard let self, let webView else {
+                        return
+                    }
+                    self.updateVisibleNavigationState(for: webView)
+                },
+                webView.observe(\.url, options: [.new]) { [weak self, weak webView] _, _ in
+                    guard let self, let webView else {
+                        return
+                    }
+                    self.updateVisibleNavigationState(for: webView)
+                }
+            ]
+        }
     }
 
-    private func loadInitialDestination() {
+    private func loadInitialDestinations() {
         switch initialDestination {
         case .url(let url):
             AppLog.info(.navigation, "initial-url", ["url": url.absoluteString])
-            load(url: url)
+            load(url: url, in: chatGPTWebView, tab: .chatGPT)
         case .fallbackStartPage:
             AppLog.warning(.navigation, "initial-fallback")
-            webView.loadHTMLString(StartPage.html, baseURL: nil)
+            chatGPTWebView.loadHTMLString(StartPage.html, baseURL: nil)
         }
+        load(url: BrowserServiceTab.aiStudio.defaultURL, in: aiStudioWebView, tab: .aiStudio)
     }
 
     private func enterInputMode() {
@@ -211,19 +323,26 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     }
 
     @objc private func goBack() {
-        if webView.canGoBack {
-            webView.goBack()
+        if activeWebView.canGoBack {
+            activeWebView.goBack()
         }
     }
 
     @objc private func goForward() {
-        if webView.canGoForward {
-            webView.goForward()
+        if activeWebView.canGoForward {
+            activeWebView.goForward()
         }
     }
 
     @objc private func reloadPage() {
-        webView.reload()
+        activeWebView.reload()
+    }
+
+    @objc private func selectTab() {
+        guard let tab = BrowserServiceTab(rawValue: tabSelector.selectedSegment) else {
+            return
+        }
+        activateTab(tab)
     }
 
     @objc private func loadAddressFromField() {
@@ -238,16 +357,18 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
             return
         }
 
-        load(url: url)
+        load(url: url, in: activeWebView, tab: activeTab)
     }
 
-    private func load(url: URL) {
-        AppLog.info(.navigation, "load", ["url": url.absoluteString])
+    private func load(url: URL, in webView: WKWebView, tab: BrowserServiceTab) {
+        AppLog.info(.navigation, "load", ["tab": tab.title, "url": url.absoluteString])
         webView.load(URLRequest(url: url))
-        addressField.stringValue = url.absoluteString
+        if tab == activeTab {
+            addressField.stringValue = url.absoluteString
+        }
     }
 
-    private func loadErrorPage(for error: Error) {
+    private func loadErrorPage(for error: Error, in webView: WKWebView) {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
             return
@@ -287,17 +408,19 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         webView.loadHTMLString(html, baseURL: nil)
     }
 
-    private func writeNavigationError(_ error: Error) {
+    private func writeNavigationError(_ error: Error, webView: WKWebView) {
         let nsError = error as NSError
         if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
             return
         }
 
-        AppLog.error(.navigation, "fail", [
+        var fields = navigationFields(for: webView, url: webView.url)
+        fields.merge([
             "description": error.localizedDescription,
             "domain": nsError.domain,
             "code": "\(nsError.code)"
-        ])
+        ]) { _, new in new }
+        AppLog.error(.navigation, "fail", fields)
     }
 
     private func escapeHTML(_ value: String) -> String {
@@ -310,8 +433,8 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     }
 
     private func updateNavigationState() {
-        backButton.isEnabled = webView.canGoBack
-        forwardButton.isEnabled = webView.canGoForward
+        backButton.isEnabled = activeWebView.canGoBack
+        forwardButton.isEnabled = activeWebView.canGoForward
         reloadButton.isEnabled = true
     }
 
@@ -320,7 +443,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
             return
         }
 
-        guard let url = webView.url else {
+        guard let url = activeWebView.url else {
             return
         }
 
@@ -328,60 +451,92 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         addressField.stringValue = url.absoluteString
         isUpdatingAddress = false
     }
-}
 
-private final class AddressTextField: NSTextField {
-    var onInteraction: (() -> Void)?
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        true
+    private func activateTab(_ tab: BrowserServiceTab) {
+        if activeTab != tab {
+            exitInputMode()
+        }
+        activeTab = tab
+        tabSelector.selectedSegment = tab.rawValue
+        chatGPTWebView.isHidden = tab != .chatGPT
+        aiStudioWebView.isHidden = tab != .aiStudio
+        updateAddressFromWebView()
+        updateNavigationState()
+        updateSessionBanner()
+        AppLog.info(.navigation, "tab-selected", ["tab": tab.title])
     }
 
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .arrow)
+    private func webView(for tab: BrowserServiceTab) -> FocusAwareWebView {
+        switch tab {
+        case .chatGPT:
+            chatGPTWebView
+        case .aiStudio:
+            aiStudioWebView
+        }
     }
 
-    override func mouseDown(with event: NSEvent) {
-        NSCursor.arrow.set()
-        onInteraction?()
-        super.mouseDown(with: event)
+    private func tab(for webView: WKWebView) -> BrowserServiceTab? {
+        if webView === chatGPTWebView {
+            return .chatGPT
+        }
+        if webView === aiStudioWebView {
+            return .aiStudio
+        }
+        return nil
     }
 
-    override func becomeFirstResponder() -> Bool {
-        onInteraction?()
-        return super.becomeFirstResponder()
-    }
-}
-
-private final class FocusAwareWebView: WKWebView {
-    var onInputIntent: (() -> Void)?
-
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        true
+    private func updateVisibleNavigationState(for webView: WKWebView) {
+        guard webView === activeWebView else {
+            return
+        }
+        updateAddressFromWebView()
+        updateNavigationState()
     }
 
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .arrow)
+    private func navigationFields(for webView: WKWebView, url: URL?) -> [String: String] {
+        var fields: [String: String] = [:]
+        if let tab = tab(for: webView) {
+            fields["tab"] = tab.title
+        }
+        if let url {
+            fields["url"] = url.absoluteString
+        }
+        return fields
     }
 
-    override func cursorUpdate(with event: NSEvent) {
-        NSCursor.arrow.set()
+    private func setSessionState(_ state: BrowserSessionState, for tab: BrowserServiceTab) {
+        guard sessionStates[tab] != state else {
+            return
+        }
+        sessionStates[tab] = state
+        AppLog.info(.session, "state-changed", [
+            "state": sessionStateName(state),
+            "tab": tab.title
+        ])
+        if activeTab == tab {
+            updateSessionBanner()
+        }
     }
 
-    override func mouseDown(with event: NSEvent) {
-        NSCursor.arrow.set()
-        onInputIntent?()
-        super.mouseDown(with: event)
+    private func updateSessionBanner() {
+        guard sessionStates[activeTab] == .needsSignIn else {
+            sessionBanner.isHidden = true
+            sessionBannerLabel.stringValue = ""
+            return
+        }
+
+        sessionBannerLabel.stringValue = "Сессия \(activeTab.title) не активна. Войдите на странице; авторизация сохранится."
+        sessionBanner.isHidden = false
     }
 
-    override func rightMouseDown(with event: NSEvent) {
-        NSCursor.arrow.set()
-        onInputIntent?()
-        super.rightMouseDown(with: event)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        onInputIntent?()
-        super.keyDown(with: event)
+    private func sessionStateName(_ state: BrowserSessionState) -> String {
+        switch state {
+        case .unknown:
+            "unknown"
+        case .authenticated:
+            "authenticated"
+        case .needsSignIn:
+            "needs-sign-in"
+        }
     }
 }

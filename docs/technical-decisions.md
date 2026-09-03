@@ -10,7 +10,15 @@
 - Минимальные платформы: macOS 14 и Windows 10 version 2004 (`10.0.19041`).
 - UI реализуется на AppKit и WinForms без обязательных Xcode/Visual Studio GUI workflows.
 - Встроенный браузер macOS работает на `WKWebView`; Windows - на WebView2 Evergreen Runtime.
-- Данные сайтов хранятся в persistent `WKWebsiteDataStore` со стабильным UUID профиля.
+- Данные сайтов хранятся в persistent `WKWebsiteDataStore`; identity профиля состоит из стабильных
+  UUID и bundle identifier `com.igor.safescreen.overlay-browser`.
+- Legacy-профиль прямого SwiftPM-запуска мигрируется в канонический bundle-профиль один раз, с
+  backup существующего destination и маркером завершения до создания первого `WKWebView`.
+- macOS shell держит две живые вкладки на общем data store: ChatGPT активна при старте, Google AI
+  Studio загружается второй; переключение не пересоздает `WKWebView`.
+- Login/OAuth navigation, запрашивающая новое WebKit-окно, открывается в текущей вкладке overlay.
+- Session banner показывается только при подтвержденном отсутствии сессии или редиректе на login
+  host и не называет причиной конкретную cookie, потому что logout может быть серверным.
 - WebKit-конфигурация добавляет global user scripts для fixed cursor и silent media policy во всех
   frames.
 - WebKit media playback требует пользовательского действия, а user script глушит `audio`/`video` и
@@ -49,6 +57,8 @@
   branded Google Chrome может игнорировать command-line unpacked extension flags.
 - E2E-runner живет в `tools/e2e/run-e2e.mjs`, поднимает локальные проверочные страницы и пишет
   отчеты в `logs/e2e-*.json`/`.log`.
+- App E2E работает в отдельном bundle/profile namespace и проверяет persistent cookie и localStorage
+  через останов и повторный запуск процесса, не используя профиль пользователя.
 - Расширенный DOM-control должен строиться внутри WebKit shell через `WKUserScript`,
   `WKScriptMessageHandler` и доменно-ограниченные policies.
 - Проект проверяет системные macOS-инварианты capture/focus для звонков и демонстрации экрана, но
@@ -91,8 +101,8 @@
 
 - После изменения target names или module names должен проходить `swift test`.
 - После изменения GUI shell должен проходить smoke-запуск `swift run OverlayBrowser -- https://example.com`.
-- После изменения WebKit profile тесты должны проверять `WKWebsiteDataStore.isPersistent` и
-  стабильный `identifier`, а также наличие fixed cursor и silent media user scripts.
+- После изменения WebKit profile тесты должны проверять `WKWebsiteDataStore.isPersistent`,
+  стабильный `identifier`, миграцию legacy data с backup и наличие browser user scripts.
 - После изменения `OverlayFocusGuard` должны проходить JS syntax checks, manifest JSON parse и
   `OverlayFocusGuardExtensionTests`.
 - После изменения app shell, hotkeys, paste, extension guard, persistence, reload или screen-share

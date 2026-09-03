@@ -6,6 +6,8 @@ enum AppLog {
         case hotKey = "hotkey"
         case input
         case navigation
+        case profile
+        case session
         case window
     }
 

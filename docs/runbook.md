@@ -75,6 +75,10 @@ npm run macos:install-and-launch
 Поведение:
 
 - без URL открывается `https://chatgpt.com/`;
+- при обычном старте создаются две вкладки: активная `ChatGPT` и `AI Studio` с
+  `https://aistudio.google.com/`;
+- вкладки используют один persistent WebKit data store и не пересоздаются при переключении;
+- при подтвержденном отсутствии активной сессии внутри окна появляется баннер с просьбой войти;
 - URL без схемы нормализуется в `https://...`;
 - невалидный явный URL открывает встроенную стартовую страницу;
 - `Left Option+Left Shift` и `Right Option+Right Shift` показывают или прячут окно;
@@ -145,8 +149,9 @@ swift test --filter OverlayFocusGuardExtensionTests
 ## E2E-проверки
 
 Основной E2E-runner поднимает локальный HTTP-сервер с тестовыми страницами, собирает приложение,
-запускает overlay, проверяет window privacy, hotkeys, native `Command+V`, расширение
-`OverlayFocusGuard`, персистентность per-origin toggle, reload extension и screen-share sample.
+запускает overlay в отдельном test bundle/profile, проверяет window privacy, hotkeys, native
+`Command+V`, cookie/localStorage после полного рестарта, расширение `OverlayFocusGuard`,
+персистентность per-origin toggle, reload extension и screen-share sample.
 Отчеты пишутся в `logs/e2e-*.json` и `logs/e2e-*.log`.
 
 Только overlay app:
@@ -503,7 +508,24 @@ sharingState=0
 
 ## Проверка персистентности профиля
 
-Сценарий:
+Автоматическая проверка реального рестарта:
+
+```bash
+cd /Users/igor/projects/safescreen
+npm run e2e:app
+```
+
+Шаг `overlay-cookie-and-storage-persistence` использует отдельный test bundle identifier, записывает
+persistent cookie и localStorage, завершает процесс и проверяет те же значения после нового запуска.
+Профиль пользователя не используется.
+
+Канонический пользовательский профиль app bundle находится в
+`~/Library/WebKit/com.igor.safescreen.overlay-browser`. При первом переходе с прямого SwiftPM-запуска
+приложение один раз мигрирует `~/Library/WebKit/OverlayBrowser`; существующий destination перед
+заменой копируется в
+`~/Library/Application Support/OverlayBrowser/ProfileMigrations/ProfileBackups`.
+
+Ручной сценарий:
 
 - запустить `OverlayBrowser` с тестовым сайтом, который устанавливает cookie или localStorage;
 - выполнить действие, которое сохраняет состояние в сайте;

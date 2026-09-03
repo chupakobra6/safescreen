@@ -3,6 +3,7 @@ import WebKit
 
 @MainActor
 public enum BrowserProfile {
+    nonisolated public static let canonicalBundleIdentifier = "com.igor.safescreen.overlay-browser"
     public static let websiteDataStoreIdentifier = UUID(
         uuidString: "4B801A03-C12C-4C5C-89CE-28D85E385B77"
     )!
@@ -144,6 +145,34 @@ public enum BrowserProfile {
     private static let websiteDataStore = WKWebsiteDataStore(
         forIdentifier: websiteDataStoreIdentifier
     )
+
+    nonisolated public static func migrateLegacyProfileIfNeeded(
+        fileManager: FileManager = .default
+    ) throws -> BrowserProfileMigrationResult {
+        guard Bundle.main.bundleIdentifier == canonicalBundleIdentifier else {
+            return .notCanonicalBundle
+        }
+
+        let libraryDirectory = fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library", isDirectory: true)
+        let webKitDirectory = libraryDirectory.appendingPathComponent("WebKit", isDirectory: true)
+        let legacyRoot = webKitDirectory.appendingPathComponent("OverlayBrowser", isDirectory: true)
+        let canonicalRoot = webKitDirectory.appendingPathComponent(
+            canonicalBundleIdentifier,
+            isDirectory: true
+        )
+        let stateDirectory = libraryDirectory
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("OverlayBrowser", isDirectory: true)
+            .appendingPathComponent("ProfileMigrations", isDirectory: true)
+
+        return try BrowserProfileMigration.migrateIfNeeded(
+            legacyRoot: legacyRoot,
+            canonicalRoot: canonicalRoot,
+            stateDirectory: stateDirectory,
+            fileManager: fileManager
+        )
+    }
 
     public static func makeWebViewConfiguration() -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
