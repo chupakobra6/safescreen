@@ -71,6 +71,12 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
 
     private lazy var chatGPTWebView = makeWebView()
     private lazy var aiStudioWebView = makeWebView()
+    private let webViewContainer = NSView()
+
+    var notificationPresentationView: NSView {
+        loadViewIfNeeded()
+        return webViewContainer
+    }
 
     private var allWebViews: [FocusAwareWebView] {
         [chatGPTWebView, aiStudioWebView]
@@ -221,7 +227,6 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         toolbar.spacing = 8
         toolbar.edgeInsets = NSEdgeInsets(top: 4, left: 8, bottom: 8, right: 8)
 
-        let webViewContainer = NSView()
         allWebViews.forEach { webView in
             webView.translatesAutoresizingMaskIntoConstraints = false
             webViewContainer.addSubview(webView)

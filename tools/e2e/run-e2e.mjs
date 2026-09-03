@@ -597,6 +597,8 @@ let alphas = points.map { bitmap.colorAt(x: Int($0.x), y: Int($0.y))?.alphaCompo
 let payload: [String: Any] = [
     "width": bitmap.pixelsWide,
     "height": bitmap.pixelsHigh,
+    "pointWidth": bitmap.size.width,
+    "pointHeight": bitmap.size.height,
     "cornerAlphas": alphas
 ]
 let payloadData = try! JSONSerialization.data(withJSONObject: payload)
@@ -947,7 +949,7 @@ async function testOverlaySmoke() {
     if (separateToast.found) throw new Error("startup hotkey reminder opened a separate window");
     const snapshot = await waitForFile(toastSnapshotPath);
     const snapshotImage = await imageCornerInfo(toastSnapshotPath);
-    if (snapshotImage.width < 380 || snapshotImage.height < 104) {
+    if (Math.abs(snapshotImage.pointWidth - 332) > 1 || Math.abs(snapshotImage.pointHeight - 82) > 1) {
       throw new Error(`unexpected embedded toast snapshot size ${JSON.stringify(snapshotImage)}`);
     }
     if (Math.max(...snapshotImage.cornerAlphas) > 0.15) {
@@ -958,7 +960,7 @@ async function testOverlaySmoke() {
     if (!logs.includes("event=initial-url") || !logs.includes("https://chatgpt.com/")) {
       throw new Error("default ChatGPT navigation was not logged");
     }
-    if (!logs.includes("category=notification event=shown container=browser-window id=hotkeys")) {
+    if (!logs.includes("category=notification event=shown container=browser-page id=hotkeys")) {
       throw new Error("startup hotkey reminder was not shown inside the browser window");
     }
 
@@ -989,12 +991,20 @@ async function testSystemScreenCapturePrivacy(server) {
   try {
     const info = await windowInfo(overlay.pid);
     if (!info.found) throw new Error("overlay window not found for system capture");
-    await waitForOutput(
-      overlay,
-      ({ stderr }) => stderr.includes("category=notification event=shown container=browser-window id=hotkeys")
-    );
-
     const bounds = info.bounds;
+    const geometryOutput = await waitForOutput(
+      overlay,
+      ({ stderr }) => stderr.includes("category=notification event=geometry")
+    );
+    const geometryMatch = geometryOutput.stderr.match(
+      /category=notification event=geometry closeX=([0-9.]+) closeY=([0-9.]+) id=hotkeys/
+    );
+    if (!geometryMatch) throw new Error("embedded toast geometry was not logged");
+    const closePoint = {
+      x: Number(bounds.X) + Number(geometryMatch[1]),
+      y: Number(bounds.Y) + Number(geometryMatch[2])
+    };
+
     const points = [
       {
         name: "browserCenter",
@@ -1003,8 +1013,8 @@ async function testSystemScreenCapturePrivacy(server) {
       },
       {
         name: "toastCenter",
-        x: Number(bounds.X) + Number(bounds.Width) - 202,
-        y: Number(bounds.Y) + 92
+        x: closePoint.x - 148.5,
+        y: closePoint.y + 23.5
       }
     ];
     const visible = await systemScreenCaptureSamples(activeCapturePath, points);
@@ -1014,10 +1024,7 @@ async function testSystemScreenCapturePrivacy(server) {
     }
 
     const foregroundBeforeClose = await frontmostApplicationInfo();
-    await clickScreenPoint(
-      Number(bounds.X) + Number(bounds.Width) - 33,
-      Number(bounds.Y) + 61
-    );
+    await clickScreenPoint(closePoint.x, closePoint.y);
     await waitForOutput(
       overlay,
       ({ stderr }) => stderr.includes("category=notification event=dismissed id=hotkeys reason=button")
@@ -1051,6 +1058,7 @@ async function testSystemScreenCapturePrivacy(server) {
       comparisons,
       foregroundBeforeClose,
       foregroundAfterClose,
+      closePoint,
       visibleCapture: visible,
       closedCapture: closed
     };
@@ -1423,8 +1431,8 @@ async function testScreenSharePrivacy(server, keepChrome) {
         screenHeight: screenSize.height
       },
       toastCenter: {
-        x: Number(bounds.X) + Number(bounds.Width) - 202,
-        y: Number(bounds.Y) + 92,
+        x: Number(bounds.X) + Number(bounds.Width) - 176,
+        y: Number(bounds.Y) + 154,
         screenWidth: screenSize.width,
         screenHeight: screenSize.height
       }

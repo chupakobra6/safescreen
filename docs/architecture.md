@@ -30,9 +30,9 @@ shell не используют общий runtime-код: переносима�
 - executable product `OverlayBrowser`;
 - две встроенные вкладки `WKWebView` с общими address/back/forward/reload controls: активная при
   старте ChatGPT и фоновая Google AI Studio;
-- toast-уведомления внутри правого верхнего угла окна браузера сообщают о modifier-only hotkeys и
-  необходимости повторного входа, автоматически исчезают и наследуют capture exclusion
-  единственного `BrowserPanel`;
+- компактные toast-уведомления внутри правого верхнего угла страницы, ниже toolbar, сообщают о
+  modifier-only hotkeys и необходимости повторного входа, автоматически исчезают и наследуют
+  capture exclusion единственного `BrowserPanel`;
 - постоянный WebKit-профиль через `WKWebsiteDataStore(forIdentifier:)`;
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - одноразовая миграция legacy-профиля SwiftPM-запуска в канонический bundle-профиль с резервной

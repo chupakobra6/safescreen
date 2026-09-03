@@ -15,8 +15,8 @@ final class OverlayNotificationController: NSObject {
         let trailingConstraint: NSLayoutConstraint
     }
 
-    private static let size = NSSize(width: 380, height: 104)
-    private static let margin: CGFloat = 12
+    private static let size = NSSize(width: 332, height: 82)
+    private static let margin: CGFloat = 10
 
     private weak var containerView: NSView?
     private var queue: [Notification] = []
@@ -33,7 +33,7 @@ final class OverlayNotificationController: NSObject {
         enqueue(Notification(
             identifier: "hotkeys",
             title: "Горячие клавиши",
-            message: "Левые Option + Shift или правые Option + Shift показывают и скрывают окно.",
+            message: "Option + Shift слева или справа: показать или скрыть окно.",
             duration: 5.5
         ))
     }
@@ -42,7 +42,7 @@ final class OverlayNotificationController: NSObject {
         enqueue(Notification(
             identifier: "session-\(tab.rawValue)",
             title: "Требуется вход в \(tab.title)",
-            message: "Откройте вкладку и войдите снова. Авторизация сохранится.",
+            message: "Откройте вкладку и войдите снова. Сессия сохранится.",
             duration: 5.5
         ))
     }
@@ -68,7 +68,8 @@ final class OverlayNotificationController: NSObject {
         }
 
         let notification = queue.removeFirst()
-        let notificationView = makeView(for: notification)
+        let presentation = makeView(for: notification)
+        let notificationView = presentation.view
         notificationView.translatesAutoresizingMaskIntoConstraints = false
         notificationView.alphaValue = 0
         containerView.addSubview(notificationView)
@@ -109,22 +110,23 @@ final class OverlayNotificationController: NSObject {
         }
 
         scheduleSnapshotIfRequested(for: notificationView, identifier: notification.identifier)
+        scheduleGeometryLog(for: presentation.closeButton, identifier: notification.identifier)
         scheduleDismiss(after: notification.duration)
         AppLog.info(.notification, "shown", [
-            "container": "browser-window",
+            "container": "browser-page",
             "id": notification.identifier,
             "sharing": "inherited-none"
         ])
     }
 
-    private func makeView(for notification: Notification) -> NSView {
+    private func makeView(for notification: Notification) -> (view: NSView, closeButton: NSButton) {
         let wrapper = OverlayNotificationView()
         wrapper.wantsLayer = true
         wrapper.layer?.backgroundColor = NSColor.clear.cgColor
         wrapper.layer?.shadowColor = NSColor.black.cgColor
         wrapper.layer?.shadowOpacity = 0.22
-        wrapper.layer?.shadowRadius = 12
-        wrapper.layer?.shadowOffset = NSSize(width: 0, height: -3)
+        wrapper.layer?.shadowRadius = 10
+        wrapper.layer?.shadowOffset = NSSize(width: 0, height: -2)
         wrapper.setAccessibilityIdentifier("overlay-notification-\(notification.identifier)")
         wrapper.setAccessibilityLabel(notification.title)
 
@@ -133,7 +135,7 @@ final class OverlayNotificationController: NSObject {
         background.blendingMode = .withinWindow
         background.state = .active
         background.wantsLayer = true
-        background.layer?.cornerRadius = 16
+        background.layer?.cornerRadius = 14
         background.layer?.cornerCurve = .continuous
         background.layer?.borderWidth = 0.5
         background.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.55).cgColor
@@ -145,12 +147,12 @@ final class OverlayNotificationController: NSObject {
         icon.translatesAutoresizingMaskIntoConstraints = false
 
         let title = NSTextField(labelWithString: notification.title)
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.font = .systemFont(ofSize: 12, weight: .semibold)
         title.textColor = .labelColor
         title.lineBreakMode = .byTruncatingTail
 
         let message = NSTextField(wrappingLabelWithString: notification.message)
-        message.font = .systemFont(ofSize: 12)
+        message.font = .systemFont(ofSize: 11)
         message.textColor = .secondaryLabelColor
         message.maximumNumberOfLines = 2
         message.lineBreakMode = .byWordWrapping
@@ -158,7 +160,7 @@ final class OverlayNotificationController: NSObject {
         let textStack = NSStackView(views: [title, message])
         textStack.orientation = .vertical
         textStack.alignment = .leading
-        textStack.spacing = 4
+        textStack.spacing = 2
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
         let closeButton = NSButton(
@@ -183,23 +185,37 @@ final class OverlayNotificationController: NSObject {
             background.topAnchor.constraint(equalTo: wrapper.topAnchor),
             background.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
 
-            icon.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 14),
+            icon.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 10),
             icon.centerYAnchor.constraint(equalTo: background.centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 48),
-            icon.heightAnchor.constraint(equalToConstant: 48),
+            icon.widthAnchor.constraint(equalToConstant: 38),
+            icon.heightAnchor.constraint(equalToConstant: 38),
 
-            textStack.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 12),
-            textStack.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -10),
+            textStack.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+            textStack.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -8),
             textStack.centerYAnchor.constraint(equalTo: background.centerYAnchor),
 
-            closeButton.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -12),
-            closeButton.topAnchor.constraint(equalTo: background.topAnchor, constant: 12),
-            closeButton.widthAnchor.constraint(equalToConstant: 18),
-            closeButton.heightAnchor.constraint(equalToConstant: 18)
+            closeButton.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -10),
+            closeButton.topAnchor.constraint(equalTo: background.topAnchor, constant: 10),
+            closeButton.widthAnchor.constraint(equalToConstant: 15),
+            closeButton.heightAnchor.constraint(equalToConstant: 15)
         ])
 
         background.setAccessibilityElement(false)
-        return wrapper
+        return (wrapper, closeButton)
+    }
+
+    private func scheduleGeometryLog(for closeButton: NSButton, identifier: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak closeButton] in
+            guard let closeButton, let window = closeButton.window else {
+                return
+            }
+            let frameInWindow = closeButton.convert(closeButton.bounds, to: nil)
+            AppLog.info(.notification, "geometry", [
+                "closeX": String(format: "%.1f", frameInWindow.midX),
+                "closeY": String(format: "%.1f", window.frame.height - frameInWindow.midY),
+                "id": identifier
+            ])
+        }
     }
 
     private func scheduleDismiss(after duration: TimeInterval) {
