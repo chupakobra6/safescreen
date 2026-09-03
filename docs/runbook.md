@@ -82,10 +82,11 @@ Dock host и browser helper, затем убирает indicator.
 - без URL открывается `https://chatgpt.com/`;
 - при обычном старте создаются две вкладки: активная `ChatGPT` и `AI Studio` с
   `https://aistudio.google.com/`;
-- при каждом запуске в правом верхнем углу экрана появляется неактивирующий toast с напоминанием о
-  горячих клавишах; он закрывается крестиком или автоматически исчезает;
+- при каждом запуске внутри правого верхнего угла браузерного окна появляется toast с напоминанием
+  о горячих клавишах; он закрывается крестиком или автоматически исчезает;
 - вкладки используют один persistent WebKit data store и не пересоздаются при переключении;
-- при подтвержденном отсутствии активной сессии появляется auto-dismiss toast с просьбой войти;
+- при подтвержденном отсутствии активной сессии внутри браузерного окна появляется auto-dismiss
+  toast с просьбой войти;
 - URL без схемы нормализуется в `https://...`;
 - невалидный явный URL открывает встроенную стартовую страницу;
 - `Left Option+Left Shift` и `Right Option+Right Shift` показывают или прячут окно;
@@ -157,10 +158,10 @@ swift test --filter OverlayFocusGuardExtensionTests
 
 Основной E2E-runner поднимает локальный HTTP-сервер с тестовыми страницами, собирает приложение,
 запускает overlay в отдельном test bundle/profile, проверяет window privacy, Dock activation
-policy, lifecycle пары Dock host/browser helper, toast appearance/auto-dismiss, hotkeys, native
-`Command+V`, сохранение foreground PID, cookie/localStorage после полного рестарта, расширение
-`OverlayFocusGuard`,
-персистентность per-origin toggle, reload extension и screen-share sample.
+policy, lifecycle пары Dock host/browser helper, embedded toast appearance/auto-dismiss, hotkeys,
+native `Command+V`, сохранение foreground PID, cookie/localStorage после полного рестарта,
+расширение `OverlayFocusGuard`, персистентность per-origin toggle, reload extension и screen-share
+sample.
 Отчеты пишутся в `logs/e2e-*.json` и `logs/e2e-*.log`.
 
 Только overlay app:
@@ -479,8 +480,9 @@ swift run OverlayBrowser -- https://example.com
 - invalid URL в адресной строке не издает системный beep;
 - при ошибке загрузки вместо пустого окна показывается простая HTML-страница ошибки, а причина
   пишется в stderr;
-- hotkey/session toast появляется справа сверху, не получает key focus, имеет
-  `CGWindowSharingState == 0` и исчезает автоматически;
+- hotkey/session toast появляется внутри окна справа сверху, не создаёт отдельное окно, не получает
+  key focus и исчезает автоматически; единственный `BrowserPanel` сохраняет
+  `CGWindowSharingState == 0`;
 - у запущенного приложения есть Dock indicator и штатный `Quit`, после завершения indicator
   исчезает;
 - закрытие окна не завершает процесс, повторный hotkey возвращает окно.
@@ -492,13 +494,18 @@ swift run OverlayBrowser -- https://example.com
 обычно используют звонки и демонстрация экрана. Проект не скрывает процесс или окно от локальных
 приложений.
 
+`npm run e2e:app` дополнительно делает реальный снимок экрана через macOS `screencapture` при
+открытом overlay с активным встроенным toast и после закрытия overlay. Пиксели в центре браузера и
+toast должны совпасть: это защищает от отдельной capture surface уведомления. Проверка углов PNG
+toast также требует прозрачный alpha, а список окон не должен содержать отдельное toast-окно.
+
 ```bash
 cd /Users/igor/projects/safescreen
 (
   set -e
   swift build
   logfile=$(mktemp /tmp/overlay-browser-privacy.XXXXXX)
-  .build/debug/OverlayBrowser https://example.com >"$logfile" 2>&1 &
+  .build/debug/OverlayBrowser --overlay-helper https://example.com >"$logfile" 2>&1 &
   pid=$!
   cleanup() {
     kill "$pid" 2>/dev/null || true

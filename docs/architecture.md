@@ -30,8 +30,9 @@ shell не используют общий runtime-код: переносима�
 - executable product `OverlayBrowser`;
 - две встроенные вкладки `WKWebView` с общими address/back/forward/reload controls: активная при
   старте ChatGPT и фоновая Google AI Studio;
-- неактивирующие toast-уведомления в правом верхнем углу экрана сообщают о modifier-only hotkeys и
-  необходимости повторного входа, автоматически исчезают и имеют `sharingType = .none`;
+- toast-уведомления внутри правого верхнего угла окна браузера сообщают о modifier-only hotkeys и
+  необходимости повторного входа, автоматически исчезают и наследуют capture exclusion
+  единственного `BrowserPanel`;
 - постоянный WebKit-профиль через `WKWebsiteDataStore(forIdentifier:)`;
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - одноразовая миграция legacy-профиля SwiftPM-запуска в канонический bundle-профиль с резервной
@@ -41,7 +42,7 @@ shell не используют общий runtime-код: переносима�
 - `NSPanel` с `.nonactivatingPanel`, `level = .floating`,
   `sharingType = .none`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`;
 - regular host-процесс для стандартного running indicator и `Quit` в Dock плюс отдельный accessory
-  helper-процесс для неактивирующего browser panel, WebKit, hotkeys и toast;
+  helper-процесс для неактивирующего browser panel, WebKit, hotkeys и встроенного toast;
 - непрозрачное читаемое окно по умолчанию с content size `420x820` и стартовой позицией справа как
   узкий sidebar; приложение не задает большой минимальный размер окна, чтобы окно можно было
   свободно ресайзить;
@@ -247,8 +248,10 @@ screen capture и приложений, которые используют си
 При обычном запуске executable работает как regular Dock host и запускает тот же executable с
 `--overlay-helper` как accessory child process. Host не создает браузерных окон: он обеспечивает
 running indicator, `Command+Q`, Dock `Quit` и пересылает Dock reopen helper-процессу через
-`DistributedNotificationCenter`. Helper владеет `BrowserPanel`, WebKit-профилем, hotkeys и toast.
-Завершение host останавливает helper; такая граница сохраняет стандартный Dock lifecycle, не
+`DistributedNotificationCenter`. Helper владеет `BrowserPanel`, WebKit-профилем, hotkeys и
+встроенным в browser panel toast. Отдельное окно для уведомлений не создается, поэтому toast не
+образует самостоятельную capture surface и скрывается вместе с `BrowserPanel`. Завершение host
+останавливает helper; такая граница сохраняет стандартный Dock lifecycle, не
 переводя browser panel в regular foreground application.
 
 Во время input mode accessory helper получает key-фокус, потому macOS иначе не доставит текстовый

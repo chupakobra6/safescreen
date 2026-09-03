@@ -65,7 +65,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
 
         panel.contentViewController = viewController
         panel.applyDefaultSidebarPlacement()
-        notificationController.anchor(to: panel)
+        notificationController.attach(to: viewController.view)
         notificationController.showHotKeyReminder()
         browserViewController = viewController
         browserPanel = panel

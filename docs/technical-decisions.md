@@ -19,9 +19,9 @@
 - Login/OAuth navigation, запрашивающая новое WebKit-окно, открывается в текущей вкладке overlay.
 - Session toast показывается только при подтвержденном отсутствии сессии или редиректе на login
   host и не называет причиной конкретную cookie, потому что logout может быть серверным.
-- Напоминание о modifier-only hotkeys и session alerts используют собственные неактивирующие
-  auto-dismiss toast-панели с `sharingType = .none`, без notification permission и Notification
-  Center history.
+- Напоминание о modifier-only hotkeys и session alerts используют auto-dismiss toast-view внутри
+  `BrowserPanel`, без отдельного окна, notification permission и Notification Center history.
+  Capture exclusion наследуется от единственной оконной surface с `sharingType = .none`.
 - WebKit-конфигурация добавляет global user scripts для fixed cursor и silent media policy во всех
   frames.
 - WebKit media playback требует пользовательского действия, а user script глушит `audio`/`video` и
@@ -31,7 +31,8 @@
 - Окно приложения реализовано как `NSPanel` с `sharingType = .none`, `.nonactivatingPanel` и
   управляемым input mode.
 - macOS executable имеет два process modes: regular Dock host показывает running indicator и
-  стандартный `Quit`, accessory helper владеет `BrowserPanel`, WebKit, hotkeys и toast. Host
+  стандартный `Quit`, accessory helper владеет `BrowserPanel`, WebKit, hotkeys и встроенным toast.
+  Host
   завершает helper и отправляет ему Dock reopen через `DistributedNotificationCenter`.
 - Дефолтный content size окна: `420x820`; стартовая позиция справа как узкий sidebar; окно
   непрозрачное; большой app-enforced минимальный размер не задается.

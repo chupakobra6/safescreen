@@ -244,10 +244,15 @@ func post(_ keyCode: Int, _ keyDown: Bool) {
 }
 
 let trusted = AXIsProcessTrusted()
-post(kVK_Option, true)
-usleep(100_000)
-let syntheticModifierStateVisible = CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_Option))
-post(kVK_Option, false)
+var syntheticModifierStateVisible = false
+for _ in 0..<3 {
+    post(kVK_Option, true)
+    usleep(180_000)
+    syntheticModifierStateVisible = CGEventSource.keyState(.hidSystemState, key: CGKeyCode(kVK_Option))
+    post(kVK_Option, false)
+    if syntheticModifierStateVisible { break }
+    usleep(120_000)
+}
 
 let payload: [String: Any] = [
     "accessibilityTrusted": trusted,
@@ -478,6 +483,7 @@ const pages = {
       statusElement.textContent = JSON.stringify(value, null, 2);
     }
     async function startCapture() {
+      if (video.srcObject) return video.srcObject;
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       video.srcObject = stream;
       await video.play();
@@ -487,6 +493,15 @@ const pages = {
       });
       return stream;
     }
+    window.__startDisplayCapture = async () => {
+      try {
+        const stream = await startCapture();
+        const track = stream.getVideoTracks()[0];
+        return { ok: true, settings: track ? track.getSettings() : {} };
+      } catch (error) {
+        return { ok: false, name: error.name, message: error.message };
+      }
+    };
     window.__sampleDisplayCapture = async ({ x, y, screenWidth, screenHeight }) => {
       try {
         const stream = await startCapture();
@@ -558,6 +573,99 @@ async function waitForFile(filePath, timeoutMs = 3000) {
     await sleep(100);
   }
   throw new Error(`timed out waiting for file ${filePath}`);
+}
+
+async function imageCornerInfo(filePath) {
+  const script = `
+import AppKit
+import Foundation
+
+let path = ProcessInfo.processInfo.environment["IMAGE_PATH"] ?? ""
+guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+      let bitmap = NSBitmapImageRep(data: data) else {
+    fputs("Unable to read PNG at \\(path)\\n", stderr)
+    exit(2)
+}
+
+let points = [
+    NSPoint(x: 0, y: 0),
+    NSPoint(x: bitmap.pixelsWide - 1, y: 0),
+    NSPoint(x: 0, y: bitmap.pixelsHigh - 1),
+    NSPoint(x: bitmap.pixelsWide - 1, y: bitmap.pixelsHigh - 1)
+]
+let alphas = points.map { bitmap.colorAt(x: Int($0.x), y: Int($0.y))?.alphaComponent ?? 1 }
+let payload: [String: Any] = [
+    "width": bitmap.pixelsWide,
+    "height": bitmap.pixelsHigh,
+    "cornerAlphas": alphas
+]
+let payloadData = try! JSONSerialization.data(withJSONObject: payload)
+print(String(data: payloadData, encoding: .utf8)!)
+`;
+  const result = await mustRun("swift", ["-e", script], { env: { IMAGE_PATH: filePath } });
+  return JSON.parse(result.stdout);
+}
+
+async function systemScreenCaptureSamples(filePath, points) {
+  await rm(filePath, { force: true });
+  const capture = await run("screencapture", ["-x", filePath]);
+  if (capture.status !== 0) {
+    throw new BlockedError("macOS did not grant system screen capture", {
+      stderr: capture.stderr,
+      status: capture.status
+    });
+  }
+  await waitForFile(filePath);
+
+  const script = `
+import AppKit
+import CoreGraphics
+import Foundation
+
+let path = ProcessInfo.processInfo.environment["IMAGE_PATH"] ?? ""
+let pointsData = (ProcessInfo.processInfo.environment["SAMPLE_POINTS"] ?? "[]").data(using: .utf8)!
+guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+      let bitmap = NSBitmapImageRep(data: data),
+      let points = try? JSONSerialization.jsonObject(with: pointsData) as? [[String: Any]] else {
+    fputs("Unable to read screen capture inputs\\n", stderr)
+    exit(2)
+}
+
+let displayBounds = CGDisplayBounds(CGMainDisplayID())
+let scaleX = CGFloat(bitmap.pixelsWide) / displayBounds.width
+let scaleY = CGFloat(bitmap.pixelsHigh) / displayBounds.height
+var samples: [String: [Int]] = [:]
+for point in points {
+    guard let name = point["name"] as? String,
+          let x = point["x"] as? NSNumber,
+          let y = point["y"] as? NSNumber else { continue }
+    let pixelX = min(bitmap.pixelsWide - 1, max(0, Int(round(x.doubleValue * scaleX))))
+    let pixelFromTop = min(bitmap.pixelsHigh - 1, max(0, Int(round(y.doubleValue * scaleY))))
+    let pixelY = bitmap.pixelsHigh - 1 - pixelFromTop
+    let color = bitmap.colorAt(x: pixelX, y: pixelY)?.usingColorSpace(.deviceRGB)
+    samples[name] = [
+        Int(round((color?.redComponent ?? 0) * 255)),
+        Int(round((color?.greenComponent ?? 0) * 255)),
+        Int(round((color?.blueComponent ?? 0) * 255)),
+        Int(round((color?.alphaComponent ?? 0) * 255))
+    ]
+}
+
+let payload: [String: Any] = [
+    "imageWidth": bitmap.pixelsWide,
+    "imageHeight": bitmap.pixelsHigh,
+    "samples": samples
+]
+let payloadData = try! JSONSerialization.data(withJSONObject: payload)
+print(String(data: payloadData, encoding: .utf8)!)
+`;
+  const result = await mustRun("swift", ["-e", script], {
+    env: {
+      IMAGE_PATH: filePath,
+      SAMPLE_POINTS: JSON.stringify(points)
+    }
+  });
+  return JSON.parse(result.stdout);
 }
 
 async function startOverlay(url, env = {}) {
@@ -727,6 +835,24 @@ post(optionKey, false)
   await mustRun("swift", ["-e", script], { env: { HOTKEY_SIDE: side } });
 }
 
+async function clickScreenPoint(x, y) {
+  const script = `
+import CoreGraphics
+import Foundation
+
+let x = Double(ProcessInfo.processInfo.environment["CLICK_X"] ?? "") ?? 0
+let y = Double(ProcessInfo.processInfo.environment["CLICK_Y"] ?? "") ?? 0
+let point = CGPoint(x: x, y: y)
+for type in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
+    let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)!
+    event.post(tap: .cghidEventTap)
+}
+`;
+  await mustRun("swift", ["-e", script], {
+    env: { CLICK_X: String(x), CLICK_Y: String(y) }
+  });
+}
+
 async function pasteTextIntoOverlay(pid, text) {
   const script = `
 import AppKit
@@ -817,24 +943,26 @@ async function testOverlaySmoke() {
       throw new Error(`expected accessory helper activation policy, got ${info.activationPolicy}`);
     }
 
-    const toast = await windowInfo(overlay.pid, "Overlay Browser Notification: hotkeys");
-    if (!toast.found) throw new Error("startup hotkey toast was not visible");
-    if (toast.sharingState !== 0) {
-      throw new Error(`expected toast sharingState=0, got ${toast.sharingState}`);
-    }
+    const separateToast = await windowInfo(overlay.pid, "Overlay Browser Notification: hotkeys");
+    if (separateToast.found) throw new Error("startup hotkey reminder opened a separate window");
     const snapshot = await waitForFile(toastSnapshotPath);
+    const snapshotImage = await imageCornerInfo(toastSnapshotPath);
+    if (snapshotImage.width < 380 || snapshotImage.height < 104) {
+      throw new Error(`unexpected embedded toast snapshot size ${JSON.stringify(snapshotImage)}`);
+    }
+    if (Math.max(...snapshotImage.cornerAlphas) > 0.15) {
+      throw new Error(`embedded toast corners are not transparent: ${JSON.stringify(snapshotImage)}`);
+    }
 
     let logs = overlay.output().stderr;
     if (!logs.includes("event=initial-url") || !logs.includes("https://chatgpt.com/")) {
       throw new Error("default ChatGPT navigation was not logged");
     }
-    if (!logs.includes("category=notification event=shown id=hotkeys")) {
-      throw new Error("startup hotkey reminder was not shown");
+    if (!logs.includes("category=notification event=shown container=browser-window id=hotkeys")) {
+      throw new Error("startup hotkey reminder was not shown inside the browser window");
     }
 
     await sleep(6200);
-    const dismissedToast = await windowInfo(overlay.pid, "Overlay Browser Notification: hotkeys");
-    if (dismissedToast.found) throw new Error("startup hotkey toast did not disappear");
     logs = overlay.output().stderr;
     if (!logs.includes("category=notification event=dismissed id=hotkeys reason=timeout")) {
       throw new Error("startup hotkey toast timeout was not logged");
@@ -843,11 +971,91 @@ async function testOverlaySmoke() {
     return {
       pid: overlay.pid,
       window: info,
-      toast,
-      toastSnapshotBytes: snapshot.size
+      embeddedToast: true,
+      separateToastWindow: separateToast.found,
+      toastSnapshotBytes: snapshot.size,
+      toastSnapshotImage: snapshotImage
     };
   } finally {
     await overlay.stop();
+  }
+}
+
+async function testSystemScreenCapturePrivacy(server) {
+  const activeCapturePath = path.join(stateRoot, "system-capture-overlay-visible.png");
+  const hiddenCapturePath = path.join(stateRoot, "system-capture-overlay-closed.png");
+  const overlay = await startOverlay(`${server.origin}/overlay-marker.html`);
+  let stopped = false;
+  try {
+    const info = await windowInfo(overlay.pid);
+    if (!info.found) throw new Error("overlay window not found for system capture");
+    await waitForOutput(
+      overlay,
+      ({ stderr }) => stderr.includes("category=notification event=shown container=browser-window id=hotkeys")
+    );
+
+    const bounds = info.bounds;
+    const points = [
+      {
+        name: "browserCenter",
+        x: Number(bounds.X) + Number(bounds.Width) / 2,
+        y: Number(bounds.Y) + Number(bounds.Height) / 2
+      },
+      {
+        name: "toastCenter",
+        x: Number(bounds.X) + Number(bounds.Width) - 202,
+        y: Number(bounds.Y) + 92
+      }
+    ];
+    const visible = await systemScreenCaptureSamples(activeCapturePath, points);
+    const [red, green, blue] = visible.samples.browserCenter;
+    if (red > 220 && green < 40 && blue > 220) {
+      throw new Error("overlay marker was visible in macOS system screen capture");
+    }
+
+    const foregroundBeforeClose = await frontmostApplicationInfo();
+    await clickScreenPoint(
+      Number(bounds.X) + Number(bounds.Width) - 33,
+      Number(bounds.Y) + 61
+    );
+    await waitForOutput(
+      overlay,
+      ({ stderr }) => stderr.includes("category=notification event=dismissed id=hotkeys reason=button")
+    );
+    const foregroundAfterClose = await frontmostApplicationInfo();
+    if (foregroundAfterClose.pid !== foregroundBeforeClose.pid) {
+      throw new Error(
+        `toast close changed foreground app from ${foregroundBeforeClose.name} to ${foregroundAfterClose.name}`
+      );
+    }
+
+    await overlay.stop();
+    stopped = true;
+    await sleep(400);
+    const closed = await systemScreenCaptureSamples(hiddenCapturePath, points);
+    const comparisons = {};
+    for (const point of points) {
+      const before = visible.samples[point.name];
+      const after = closed.samples[point.name];
+      const deltas = before.map((value, index) => Math.abs(value - after[index]));
+      comparisons[point.name] = { before, after, deltas };
+      if (Math.max(...deltas) > 25) {
+        throw new Error(
+          `${point.name} changed in macOS system capture while closing overlay: ${JSON.stringify(comparisons[point.name])}`
+        );
+      }
+    }
+
+    return {
+      bounds,
+      comparisons,
+      foregroundBeforeClose,
+      foregroundAfterClose,
+      visibleCapture: visible,
+      closedCapture: closed
+    };
+  } finally {
+    if (!stopped) await overlay.stop();
   }
 }
 
@@ -1178,7 +1386,6 @@ async function testExtensionReload(keepChrome) {
 
 async function testScreenSharePrivacy(server, keepChrome) {
   const playwright = await importPlaywright();
-  const overlay = await startOverlay(`${server.origin}/overlay-marker.html`);
   const profileDir = path.join(stateRoot, "chrome-screen-share-profile");
   await rm(profileDir, { recursive: true, force: true });
   await mkdir(profileDir, { recursive: true });
@@ -1193,34 +1400,83 @@ async function testScreenSharePrivacy(server, keepChrome) {
       "--allow-http-screen-capture"
     ]
   });
+  let overlay;
 
   try {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/screen-share.html`);
+    const capture = await page.evaluate(() => window.__startDisplayCapture());
+    if (!capture.ok) {
+      throw new BlockedError("display capture was not granted by browser or macOS", capture);
+    }
+
+    overlay = await startOverlay(`${server.origin}/overlay-marker.html`);
     const overlayInfo = await windowInfo(overlay.pid);
     if (!overlayInfo.found) throw new Error("overlay marker window not found");
     const bounds = overlayInfo.bounds;
-    const page = await context.newPage();
-    await page.goto(`${server.origin}/screen-share.html`);
     const screenSize = await page.evaluate(() => ({ width: window.screen.width, height: window.screen.height }));
-    const sample = await page.evaluate(
-      (input) => window.__sampleDisplayCapture(input),
-      {
+    const points = {
+      browserCenter: {
         x: Number(bounds.X) + Number(bounds.Width) / 2,
         y: Number(bounds.Y) + Number(bounds.Height) / 2,
         screenWidth: screenSize.width,
         screenHeight: screenSize.height
+      },
+      toastCenter: {
+        x: Number(bounds.X) + Number(bounds.Width) - 202,
+        y: Number(bounds.Y) + 92,
+        screenWidth: screenSize.width,
+        screenHeight: screenSize.height
       }
-    );
-    if (!sample.ok) {
-      throw new BlockedError("display capture was not granted by browser or macOS", sample);
+    };
+    const visibleSamples = {};
+    for (const [name, point] of Object.entries(points)) {
+      visibleSamples[name] = await page.evaluate(
+        (input) => window.__sampleDisplayCapture(input),
+        point
+      );
+      if (!visibleSamples[name].ok) {
+        throw new BlockedError("display capture sampling failed", visibleSamples[name]);
+      }
     }
-    const [red, green, blue] = sample.pixel;
+
+    const [red, green, blue] = visibleSamples.browserCenter.pixel;
     const markerVisible = red > 220 && green < 40 && blue > 220;
     if (markerVisible) {
       throw new Error("overlay marker color was visible in display capture");
     }
-    return { overlayBounds: bounds, sample };
-  } finally {
+
     await overlay.stop();
+    overlay = undefined;
+    await sleep(500);
+
+    const hiddenSamples = {};
+    for (const [name, point] of Object.entries(points)) {
+      hiddenSamples[name] = await page.evaluate(
+        (input) => window.__sampleDisplayCapture(input),
+        point
+      );
+      if (!hiddenSamples[name].ok) {
+        throw new BlockedError("display capture sampling failed after overlay closed", hiddenSamples[name]);
+      }
+
+      const deltas = visibleSamples[name].pixel.map(
+        (value, index) => Math.abs(value - hiddenSamples[name].pixel[index])
+      );
+      if (Math.max(...deltas) > 25) {
+        throw new Error(
+          `${name} changed in display capture while closing overlay: ${JSON.stringify({
+            visible: visibleSamples[name].pixel,
+            hidden: hiddenSamples[name].pixel,
+            deltas
+          })}`
+        );
+      }
+    }
+
+    return { overlayBounds: bounds, points, visibleSamples, hiddenSamples };
+  } finally {
+    if (overlay) await overlay.stop();
     if (!keepChrome) {
       await context.close();
     }
@@ -1243,6 +1499,7 @@ async function main() {
     if (options.app) {
       await reporter.step("dock-host-lifecycle", testDockHostLifecycle);
       await reporter.step("overlay-smoke-and-privacy", testOverlaySmoke);
+      await reporter.step("system-screen-capture-overlay-exclusion", () => testSystemScreenCapturePrivacy(server));
       await reporter.step("overlay-modifier-hotkeys", () => testModifierHotKeys(server));
       await reporter.step("overlay-native-command-v-paste", () => testOverlayPaste(server));
       await reporter.step("overlay-cookie-and-storage-persistence", () => testOverlayStoragePersistence(server));

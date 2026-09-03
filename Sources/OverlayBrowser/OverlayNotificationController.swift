@@ -11,20 +11,22 @@ final class OverlayNotificationController: NSObject {
 
     private struct ActiveNotification {
         let notification: Notification
-        let panel: OverlayNotificationPanel
+        let view: NSView
+        let trailingConstraint: NSLayoutConstraint
     }
 
     private static let size = NSSize(width: 380, height: 104)
-    private static let screenMargin: CGFloat = 16
+    private static let margin: CGFloat = 12
 
-    private weak var anchorWindow: NSWindow?
+    private weak var containerView: NSView?
     private var queue: [Notification] = []
     private var activeNotification: ActiveNotification?
     private var dismissWorkItem: DispatchWorkItem?
     private var didWriteSnapshot = false
 
-    func anchor(to window: NSWindow) {
-        anchorWindow = window
+    func attach(to view: NSView) {
+        containerView = view
+        showNextIfNeeded()
     }
 
     func showHotKeyReminder() {
@@ -59,47 +61,76 @@ final class OverlayNotificationController: NSObject {
     }
 
     private func showNextIfNeeded() {
-        guard activeNotification == nil, !queue.isEmpty else {
+        guard activeNotification == nil,
+              !queue.isEmpty,
+              let containerView else {
             return
         }
 
         let notification = queue.removeFirst()
-        let panel = makePanel(for: notification)
-        let targetFrame = frame(for: panel)
-        var initialFrame = targetFrame
-        initialFrame.origin.x += 28
+        let notificationView = makeView(for: notification)
+        notificationView.translatesAutoresizingMaskIntoConstraints = false
+        notificationView.alphaValue = 0
+        containerView.addSubview(notificationView)
 
-        panel.alphaValue = 0
-        panel.setFrame(initialFrame, display: false)
-        activeNotification = ActiveNotification(notification: notification, panel: panel)
-        panel.orderFrontRegardless()
+        let widthConstraint = notificationView.widthAnchor.constraint(equalToConstant: Self.size.width)
+        widthConstraint.priority = .defaultHigh
+        let trailingConstraint = notificationView.trailingAnchor.constraint(
+            equalTo: containerView.trailingAnchor,
+            constant: 20
+        )
+        NSLayoutConstraint.activate([
+            notificationView.topAnchor.constraint(
+                equalTo: containerView.topAnchor,
+                constant: Self.margin
+            ),
+            trailingConstraint,
+            notificationView.leadingAnchor.constraint(
+                greaterThanOrEqualTo: containerView.leadingAnchor,
+                constant: Self.margin
+            ),
+            widthConstraint,
+            notificationView.heightAnchor.constraint(equalToConstant: Self.size.height)
+        ])
+        containerView.layoutSubtreeIfNeeded()
 
+        activeNotification = ActiveNotification(
+            notification: notification,
+            view: notificationView,
+            trailingConstraint: trailingConstraint
+        )
+
+        trailingConstraint.constant = -Self.margin
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.22
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 1
-            panel.animator().setFrame(targetFrame, display: true)
+            notificationView.animator().alphaValue = 1
+            containerView.animator().layoutSubtreeIfNeeded()
         }
 
-        scheduleSnapshotIfRequested(for: panel, identifier: notification.identifier)
+        scheduleSnapshotIfRequested(for: notificationView, identifier: notification.identifier)
         scheduleDismiss(after: notification.duration)
         AppLog.info(.notification, "shown", [
+            "container": "browser-window",
             "id": notification.identifier,
-            "sharing": "none"
+            "sharing": "inherited-none"
         ])
     }
 
-    private func makePanel(for notification: Notification) -> OverlayNotificationPanel {
-        let panel = OverlayNotificationPanel(contentRect: NSRect(origin: .zero, size: Self.size))
-        panel.title = "Overlay Browser Notification: \(notification.identifier)"
-        panel.contentView = makeContentView(for: notification)
-        return panel
-    }
+    private func makeView(for notification: Notification) -> NSView {
+        let wrapper = OverlayNotificationView()
+        wrapper.wantsLayer = true
+        wrapper.layer?.backgroundColor = NSColor.clear.cgColor
+        wrapper.layer?.shadowColor = NSColor.black.cgColor
+        wrapper.layer?.shadowOpacity = 0.22
+        wrapper.layer?.shadowRadius = 12
+        wrapper.layer?.shadowOffset = NSSize(width: 0, height: -3)
+        wrapper.setAccessibilityIdentifier("overlay-notification-\(notification.identifier)")
+        wrapper.setAccessibilityLabel(notification.title)
 
-    private func makeContentView(for notification: Notification) -> NSView {
         let background = NSVisualEffectView()
         background.material = .popover
-        background.blendingMode = .behindWindow
+        background.blendingMode = .withinWindow
         background.state = .active
         background.wantsLayer = true
         background.layer?.cornerRadius = 16
@@ -107,6 +138,7 @@ final class OverlayNotificationController: NSObject {
         background.layer?.borderWidth = 0.5
         background.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.55).cgColor
         background.layer?.masksToBounds = true
+        background.translatesAutoresizingMaskIntoConstraints = false
 
         let icon = NSImageView(image: NSApp.applicationIconImage)
         icon.imageScaling = .scaleProportionallyUpOrDown
@@ -143,8 +175,14 @@ final class OverlayNotificationController: NSObject {
         closeButton.setAccessibilityLabel("Закрыть уведомление")
         closeButton.translatesAutoresizingMaskIntoConstraints = false
 
+        wrapper.addSubview(background)
         [icon, textStack, closeButton].forEach(background.addSubview)
         NSLayoutConstraint.activate([
+            background.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+            background.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+            background.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            background.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+
             icon.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 14),
             icon.centerYAnchor.constraint(equalTo: background.centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 48),
@@ -161,20 +199,7 @@ final class OverlayNotificationController: NSObject {
         ])
 
         background.setAccessibilityElement(false)
-        return background
-    }
-
-    private func frame(for panel: NSWindow) -> NSRect {
-        let visibleFrame = anchorWindow?.screen?.visibleFrame
-            ?? NSScreen.main?.visibleFrame
-            ?? NSScreen.screens.first?.visibleFrame
-            ?? NSRect(origin: .zero, size: Self.size)
-        return NSRect(
-            x: visibleFrame.maxX - panel.frame.width - Self.screenMargin,
-            y: visibleFrame.maxY - panel.frame.height - Self.screenMargin,
-            width: panel.frame.width,
-            height: panel.frame.height
-        )
+        return wrapper
     }
 
     private func scheduleDismiss(after duration: TimeInterval) {
@@ -198,16 +223,15 @@ final class OverlayNotificationController: NSObject {
         dismissWorkItem?.cancel()
         dismissWorkItem = nil
         self.activeNotification = nil
+        activeNotification.trailingConstraint.constant = 8
 
-        var targetFrame = activeNotification.panel.frame
-        targetFrame.origin.x += 20
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            activeNotification.panel.animator().alphaValue = 0
-            activeNotification.panel.animator().setFrame(targetFrame, display: true)
-        }, completionHandler: { [weak self, panel = activeNotification.panel] in
-            panel.orderOut(nil)
+            activeNotification.view.animator().alphaValue = 0
+            activeNotification.view.superview?.animator().layoutSubtreeIfNeeded()
+        }, completionHandler: { [weak self, view = activeNotification.view] in
+            view.removeFromSuperview()
             self?.showNextIfNeeded()
         })
 
@@ -217,7 +241,7 @@ final class OverlayNotificationController: NSObject {
         ])
     }
 
-    private func scheduleSnapshotIfRequested(for panel: NSPanel, identifier: String) {
+    private func scheduleSnapshotIfRequested(for view: NSView, identifier: String) {
         guard !didWriteSnapshot,
               let path = ProcessInfo.processInfo.environment["OVERLAY_TOAST_SNAPSHOT_PATH"] else {
             return
@@ -228,8 +252,8 @@ final class OverlayNotificationController: NSObject {
         }
         didWriteSnapshot = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak panel] in
-            guard let view = panel?.contentView else {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak view] in
+            guard let view else {
                 return
             }
             view.layoutSubtreeIfNeeded()
@@ -258,33 +282,9 @@ final class OverlayNotificationController: NSObject {
     }
 }
 
-private final class OverlayNotificationPanel: NSPanel {
-    init(contentRect: NSRect) {
-        super.init(
-            contentRect: contentRect,
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-
-        isReleasedWhenClosed = false
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = true
-        hidesOnDeactivate = false
-        isMovable = false
-        animationBehavior = .none
-        level = .statusBar
-        sharingType = .none
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
-        isExcludedFromWindowsMenu = true
-    }
-
-    override var canBecomeKey: Bool {
-        false
-    }
-
-    override var canBecomeMain: Bool {
-        false
+private final class OverlayNotificationView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let target = super.hitTest(point)
+        return target is NSButton ? target : nil
     }
 }
