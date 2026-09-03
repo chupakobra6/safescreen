@@ -81,6 +81,9 @@
   `find . -maxdepth 3 \( -path ./.git -o -path ./.build -o -name .DS_Store \) -prune -o -type f -print | sort`.
 - Для изменений Swift-кода запускать `swift test`; при изменении GUI target дополнительно делать
   smoke-запуск из [docs/runbook.md](docs/runbook.md).
+- После завершения изменений macOS-приложения запускать `npm run macos:install`, чтобы постоянная
+  версия `~/Applications/Overlay Browser.app` в Dock соответствовала текущему коду. Для проверки
+  установленного bundle использовать `npm run macos:install-and-launch`.
 - Для изменений `Windows/` запускать `dotnet format --verify-no-changes`, переносимые unit-тесты и
   полный Windows solution build из [docs/runbook.md](docs/runbook.md). После изменений Win32/WebView2
   shell Windows CI должен дополнительно пройти published `--self-test`.

@@ -31,6 +31,15 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        AppLog.info(.app, "reopen", ["hasVisibleWindows": String(flag)])
+        showBrowserPanel()
+        return true
+    }
+
     private func setupBrowserPanel() {
         let viewController = BrowserViewController(
             initialDestination: URLArgumentParser.destination(from: arguments)
