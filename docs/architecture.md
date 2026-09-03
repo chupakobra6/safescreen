@@ -30,6 +30,8 @@ shell не используют общий runtime-код: переносима�
 - executable product `OverlayBrowser`;
 - две встроенные вкладки `WKWebView` с общими address/back/forward/reload controls: активная при
   старте ChatGPT и фоновая Google AI Studio;
+- немодальное напоминание о левой и правой modifier-only hotkey показывается сверху при каждом
+  запуске процесса и закрывается только до следующего запуска;
 - постоянный WebKit-профиль через `WKWebsiteDataStore(forIdentifier:)`;
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - одноразовая миграция legacy-профиля SwiftPM-запуска в канонический bundle-профиль с резервной

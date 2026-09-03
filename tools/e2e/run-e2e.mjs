@@ -672,6 +672,9 @@ async function testOverlaySmoke() {
     if (!logs.includes("event=initial-url") || !logs.includes("https://chatgpt.com/")) {
       throw new Error("default ChatGPT navigation was not logged");
     }
+    if (!logs.includes("category=hotkey event=startup-reminder-shown")) {
+      throw new Error("startup hotkey reminder was not shown");
+    }
     return { pid: overlay.pid, window: info };
   } finally {
     await overlay.stop();

@@ -19,6 +19,8 @@
 - Login/OAuth navigation, запрашивающая новое WebKit-окно, открывается в текущей вкладке overlay.
 - Session banner показывается только при подтвержденном отсутствии сессии или редиректе на login
   host и не называет причиной конкретную cookie, потому что logout может быть серверным.
+- Напоминание о modifier-only hotkeys встроено в основное окно и не использует modal/system alert,
+  чтобы запуск не создавал отдельное focus-stealing окно.
 - WebKit-конфигурация добавляет global user scripts для fixed cursor и silent media policy во всех
   frames.
 - WebKit media playback требует пользовательского действия, а user script глушит `audio`/`video` и

@@ -20,6 +20,14 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         self?.setSessionState(state, for: tab)
     }
 
+    private lazy var startupHotKeyNotice: StartupHotKeyNoticeView = {
+        let notice = StartupHotKeyNoticeView()
+        notice.onDismiss = {
+            AppLog.info(.hotKey, "startup-reminder-dismissed")
+        }
+        return notice
+    }()
+
     private lazy var tabSelector: NSSegmentedControl = {
         let control = NSSegmentedControl(
             labels: BrowserServiceTab.allCases.map(\.title),
@@ -132,6 +140,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     override func viewDidLoad() {
         super.viewDidLoad()
         setupLayout()
+        AppLog.info(.hotKey, "startup-reminder-shown")
         setupWebViewObservers()
         loadInitialDestinations()
         activateTab(.chatGPT)
@@ -256,7 +265,13 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         }
         aiStudioWebView.isHidden = true
 
-        let rootStack = NSStackView(views: [tabBar, toolbar, sessionBanner, webViewContainer])
+        let rootStack = NSStackView(views: [
+            startupHotKeyNotice,
+            tabBar,
+            toolbar,
+            sessionBanner,
+            webViewContainer
+        ])
         rootStack.orientation = .vertical
         rootStack.alignment = .leading
         rootStack.distribution = .fill
@@ -269,6 +284,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
             rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             rootStack.topAnchor.constraint(equalTo: view.topAnchor),
             rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            startupHotKeyNotice.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             tabBar.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             toolbar.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             sessionBanner.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
