@@ -509,10 +509,16 @@ async function waitForOverlayWindow(pid, timeoutMs = 5000) {
 async function prepareOverlayE2EApplication() {
   const contents = path.join(overlayE2EApplication, "Contents");
   const macOSDirectory = path.join(contents, "MacOS");
+  const resourcesDirectory = path.join(contents, "Resources");
   await rm(overlayE2EApplication, { recursive: true, force: true });
   await mkdir(macOSDirectory, { recursive: true });
+  await mkdir(resourcesDirectory, { recursive: true });
   await copyFile(path.join(repoRoot, ".build", "debug", "OverlayBrowser"), overlayE2EExecutable);
   await copyFile(path.join(repoRoot, "Packaging", "macOS", "Info.plist"), path.join(contents, "Info.plist"));
+  await copyFile(
+    path.join(repoRoot, "Packaging", "macOS", "AppIcon.icns"),
+    path.join(resourcesDirectory, "AppIcon.icns")
+  );
   await mustRun("plutil", [
     "-replace",
     "CFBundleIdentifier",

@@ -48,10 +48,12 @@ staging_directory="$(mktemp -d "${install_directory}/.overlay-browser-install.XX
 staging_application="${staging_directory}/Overlay Browser.app"
 trap 'rm -rf "$staging_directory"' EXIT
 
-mkdir -p "$staging_application/Contents/MacOS"
+mkdir -p "$staging_application/Contents/MacOS" "$staging_application/Contents/Resources"
 cp "$binary" "$staging_application/Contents/MacOS/OverlayBrowser"
 chmod 755 "$staging_application/Contents/MacOS/OverlayBrowser"
 cp "$repository_root/Packaging/macOS/Info.plist" "$staging_application/Contents/Info.plist"
+cp "$repository_root/Packaging/macOS/AppIcon.icns" \
+  "$staging_application/Contents/Resources/AppIcon.icns"
 
 build_number="$(date -u +%Y%m%d%H%M%S)"
 source_revision="$(git rev-parse --short HEAD)"
@@ -65,6 +67,13 @@ plutil -insert OverlayBrowserSourceRevision -string "$source_revision" \
 xattr -cr "$staging_application"
 codesign --force --sign - --timestamp=none "$staging_application"
 codesign --verify --deep --strict "$staging_application"
+
+icon_changed=true
+installed_icon="$application/Contents/Resources/AppIcon.icns"
+staged_icon="$staging_application/Contents/Resources/AppIcon.icns"
+if [[ -f "$installed_icon" ]] && cmp -s "$installed_icon" "$staged_icon"; then
+  icon_changed=false
+fi
 
 running_pids=()
 while IFS= read -r pid; do
@@ -103,9 +112,14 @@ if ! /usr/libexec/PlistBuddy -c "Print :persistent-apps" "$dock_preferences" 2>/
   dock_changed=true
 fi
 
-if [[ "$dock_changed" == true ]]; then
+if [[ "$dock_changed" == true || "$icon_changed" == true ]]; then
   killall Dock >/dev/null 2>&1 || true
+fi
+if [[ "$dock_changed" == true ]]; then
   print -r -- "Pinned Overlay Browser to the Dock."
+fi
+if [[ "$icon_changed" == true ]]; then
+  print -r -- "Refreshed the Overlay Browser Dock icon."
 fi
 
 if [[ "$launch_after_install" == true ]]; then
