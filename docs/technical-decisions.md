@@ -17,10 +17,11 @@
 - macOS shell держит две живые вкладки на общем data store: ChatGPT активна при старте, Google AI
   Studio загружается второй; переключение не пересоздает `WKWebView`.
 - Login/OAuth navigation, запрашивающая новое WebKit-окно, открывается в текущей вкладке overlay.
-- Session banner показывается только при подтвержденном отсутствии сессии или редиректе на login
+- Session toast показывается только при подтвержденном отсутствии сессии или редиректе на login
   host и не называет причиной конкретную cookie, потому что logout может быть серверным.
-- Напоминание о modifier-only hotkeys встроено в основное окно и не использует modal/system alert,
-  чтобы запуск не создавал отдельное focus-stealing окно.
+- Напоминание о modifier-only hotkeys и session alerts используют собственные неактивирующие
+  auto-dismiss toast-панели с `sharingType = .none`, без notification permission и Notification
+  Center history.
 - WebKit-конфигурация добавляет global user scripts для fixed cursor и silent media policy во всех
   frames.
 - WebKit media playback требует пользовательского действия, а user script глушит `audio`/`video` и
@@ -29,6 +30,9 @@
   открывает `https://chatgpt.com/`.
 - Окно приложения реализовано как `NSPanel` с `sharingType = .none`, `.nonactivatingPanel` и
   управляемым input mode.
+- macOS executable имеет два process modes: regular Dock host показывает running indicator и
+  стандартный `Quit`, accessory helper владеет `BrowserPanel`, WebKit, hotkeys и toast. Host
+  завершает helper и отправляет ему Dock reopen через `DistributedNotificationCenter`.
 - Дефолтный content size окна: `420x820`; стартовая позиция справа как узкий sidebar; окно
   непрозрачное; большой app-enforced минимальный размер не задается.
 - Input mode может делать окно key window для доставки текста в `WKWebView`, но не должен

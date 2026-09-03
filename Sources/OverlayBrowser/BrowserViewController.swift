@@ -5,6 +5,7 @@ import WebKit
 
 final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavigationDelegate, WKUIDelegate {
     var onInputModeChanged: ((Bool) -> Void)?
+    var onSessionNeedsSignIn: ((BrowserServiceTab) -> Void)?
 
     private let initialDestination: StartDestination
     private var observations: [NSKeyValueObservation] = []
@@ -13,20 +14,13 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         .chatGPT: .unknown,
         .aiStudio: .unknown
     ]
+    private var notifiedSessionTabs: Set<BrowserServiceTab> = []
     private var isUpdatingAddress = false
     private var isInputMode = false
 
     private lazy var sessionMonitor = BrowserSessionMonitor { [weak self] tab, state in
         self?.setSessionState(state, for: tab)
     }
-
-    private lazy var startupHotKeyNotice: StartupHotKeyNoticeView = {
-        let notice = StartupHotKeyNoticeView()
-        notice.onDismiss = {
-            AppLog.info(.hotKey, "startup-reminder-dismissed")
-        }
-        return notice
-    }()
 
     private lazy var tabSelector: NSSegmentedControl = {
         let control = NSSegmentedControl(
@@ -75,30 +69,6 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         return field
     }()
 
-    private lazy var sessionBannerLabel: NSTextField = {
-        let label = NSTextField(wrappingLabelWithString: "")
-        label.font = .systemFont(ofSize: 12)
-        label.textColor = .labelColor
-        return label
-    }()
-
-    private lazy var sessionBanner: NSView = {
-        let banner = NSView()
-        banner.wantsLayer = true
-        banner.layer?.backgroundColor = NSColor.systemYellow.withAlphaComponent(0.16).cgColor
-        banner.isHidden = true
-
-        sessionBannerLabel.translatesAutoresizingMaskIntoConstraints = false
-        banner.addSubview(sessionBannerLabel)
-        NSLayoutConstraint.activate([
-            sessionBannerLabel.leadingAnchor.constraint(equalTo: banner.leadingAnchor, constant: 10),
-            sessionBannerLabel.trailingAnchor.constraint(equalTo: banner.trailingAnchor, constant: -10),
-            sessionBannerLabel.topAnchor.constraint(equalTo: banner.topAnchor, constant: 7),
-            sessionBannerLabel.bottomAnchor.constraint(equalTo: banner.bottomAnchor, constant: -7)
-        ])
-        return banner
-    }()
-
     private lazy var chatGPTWebView = makeWebView()
     private lazy var aiStudioWebView = makeWebView()
 
@@ -140,7 +110,6 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
     override func viewDidLoad() {
         super.viewDidLoad()
         setupLayout()
-        AppLog.info(.hotKey, "startup-reminder-shown")
         setupWebViewObservers()
         loadInitialDestinations()
         activateTab(.chatGPT)
@@ -265,13 +234,7 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         }
         aiStudioWebView.isHidden = true
 
-        let rootStack = NSStackView(views: [
-            startupHotKeyNotice,
-            tabBar,
-            toolbar,
-            sessionBanner,
-            webViewContainer
-        ])
+        let rootStack = NSStackView(views: [tabBar, toolbar, webViewContainer])
         rootStack.orientation = .vertical
         rootStack.alignment = .leading
         rootStack.distribution = .fill
@@ -284,10 +247,8 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
             rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             rootStack.topAnchor.constraint(equalTo: view.topAnchor),
             rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            startupHotKeyNotice.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             tabBar.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             toolbar.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
-            sessionBanner.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             webViewContainer.widthAnchor.constraint(equalTo: rootStack.widthAnchor)
         ])
     }
@@ -478,7 +439,6 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
         aiStudioWebView.isHidden = tab != .aiStudio
         updateAddressFromWebView()
         updateNavigationState()
-        updateSessionBanner()
         AppLog.info(.navigation, "tab-selected", ["tab": tab.title])
     }
 
@@ -529,20 +489,11 @@ final class BrowserViewController: NSViewController, NSTextFieldDelegate, WKNavi
             "state": sessionStateName(state),
             "tab": tab.title
         ])
-        if activeTab == tab {
-            updateSessionBanner()
+        if state == .authenticated {
+            notifiedSessionTabs.remove(tab)
+        } else if state == .needsSignIn, notifiedSessionTabs.insert(tab).inserted {
+            onSessionNeedsSignIn?(tab)
         }
-    }
-
-    private func updateSessionBanner() {
-        guard sessionStates[activeTab] == .needsSignIn else {
-            sessionBanner.isHidden = true
-            sessionBannerLabel.stringValue = ""
-            return
-        }
-
-        sessionBannerLabel.stringValue = "Сессия \(activeTab.title) не активна. Войдите на странице; авторизация сохранится."
-        sessionBanner.isHidden = false
     }
 
     private func sessionStateName(_ state: BrowserSessionState) -> String {

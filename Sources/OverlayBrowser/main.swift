@@ -1,8 +1,13 @@
 import AppKit
 
 let app = NSApplication.shared
-let delegate = OverlayBrowserAppDelegate(arguments: CommandLine.arguments)
+let processMode = OverlayBrowserProcessMode.self
+let isHelper = CommandLine.arguments.contains(processMode.helperArgument)
+let arguments = processMode.applicationArguments(from: CommandLine.arguments)
+let delegate: NSApplicationDelegate = isHelper
+    ? OverlayBrowserAppDelegate(arguments: arguments)
+    : OverlayBrowserHostAppDelegate(arguments: arguments)
 
 app.delegate = delegate
-app.setActivationPolicy(.accessory)
+app.setActivationPolicy(isHelper ? .accessory : .regular)
 app.run()

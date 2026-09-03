@@ -72,18 +72,20 @@ cd /Users/igor/projects/safescreen
 npm run macos:install-and-launch
 ```
 
-Клик по закрепленному значку повторно показывает окно, если процесс уже запущен, но overlay был
-скрыт хоткеем или кнопкой закрытия.
+У запущенного процесса Dock показывает стандартный running indicator, если индикаторы включены в
+настройках Dock. Клик по значку повторно показывает окно, если оно было скрыто хоткеем или кнопкой
+закрытия. `Завершить`/`Quit` в контекстном меню значка или `Command+Q` полностью останавливает
+Dock host и browser helper, затем убирает indicator.
 
 Поведение:
 
 - без URL открывается `https://chatgpt.com/`;
 - при обычном старте создаются две вкладки: активная `ChatGPT` и `AI Studio` с
   `https://aistudio.google.com/`;
-- над вкладками при каждом запуске показывается немодальное напоминание о горячих клавишах; его
-  можно закрыть крестиком до следующего запуска приложения;
+- при каждом запуске в правом верхнем углу экрана появляется неактивирующий toast с напоминанием о
+  горячих клавишах; он закрывается крестиком или автоматически исчезает;
 - вкладки используют один persistent WebKit data store и не пересоздаются при переключении;
-- при подтвержденном отсутствии активной сессии внутри окна появляется баннер с просьбой войти;
+- при подтвержденном отсутствии активной сессии появляется auto-dismiss toast с просьбой войти;
 - URL без схемы нормализуется в `https://...`;
 - невалидный явный URL открывает встроенную стартовую страницу;
 - `Left Option+Left Shift` и `Right Option+Right Shift` показывают или прячут окно;
@@ -154,8 +156,10 @@ swift test --filter OverlayFocusGuardExtensionTests
 ## E2E-проверки
 
 Основной E2E-runner поднимает локальный HTTP-сервер с тестовыми страницами, собирает приложение,
-запускает overlay в отдельном test bundle/profile, проверяет window privacy, hotkeys, native
-`Command+V`, cookie/localStorage после полного рестарта, расширение `OverlayFocusGuard`,
+запускает overlay в отдельном test bundle/profile, проверяет window privacy, Dock activation
+policy, lifecycle пары Dock host/browser helper, toast appearance/auto-dismiss, hotkeys, native
+`Command+V`, сохранение foreground PID, cookie/localStorage после полного рестарта, расширение
+`OverlayFocusGuard`,
 персистентность per-origin toggle, reload extension и screen-share sample.
 Отчеты пишутся в `logs/e2e-*.json` и `logs/e2e-*.log`.
 
@@ -475,6 +479,10 @@ swift run OverlayBrowser -- https://example.com
 - invalid URL в адресной строке не издает системный beep;
 - при ошибке загрузки вместо пустого окна показывается простая HTML-страница ошибки, а причина
   пишется в stderr;
+- hotkey/session toast появляется справа сверху, не получает key focus, имеет
+  `CGWindowSharingState == 0` и исчезает автоматически;
+- у запущенного приложения есть Dock indicator и штатный `Quit`, после завершения indicator
+  исчезает;
 - закрытие окна не завершает процесс, повторный hotkey возвращает окно.
 
 ## Проверка window privacy

@@ -2,7 +2,7 @@
 
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -132,6 +132,96 @@ async function mustRun(command, args = [], options = {}) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function frontmostApplicationInfo() {
+  const script = `
+import AppKit
+import Foundation
+
+let application = NSWorkspace.shared.frontmostApplication
+let payload: [String: Any] = [
+    "pid": application?.processIdentifier ?? -1,
+    "bundleIdentifier": application?.bundleIdentifier ?? "",
+    "name": application?.localizedName ?? ""
+]
+let data = try! JSONSerialization.data(withJSONObject: payload)
+print(String(data: data, encoding: .utf8)!)
+`;
+  const result = await mustRun("swift", ["-e", script]);
+  return JSON.parse(result.stdout);
+}
+
+async function activateApplication(pid) {
+  const script = `
+import AppKit
+import Foundation
+
+let pid = Int32(ProcessInfo.processInfo.environment["TARGET_PID"] ?? "") ?? -1
+guard let application = NSRunningApplication(processIdentifier: pid),
+      application.activate(options: [.activateIgnoringOtherApps]) else {
+    fputs("failed to activate pid \\(pid)\\n", stderr)
+    exit(2)
+}
+`;
+  await mustRun("swift", ["-e", script], { env: { TARGET_PID: String(pid) } });
+}
+
+async function runningApplicationInfo(pid) {
+  const script = `
+import AppKit
+import Foundation
+
+let pid = Int32(ProcessInfo.processInfo.environment["TARGET_PID"] ?? "") ?? -1
+let application = NSRunningApplication(processIdentifier: pid)
+let payload: [String: Any] = [
+    "found": application != nil,
+    "activationPolicy": application?.activationPolicy.rawValue ?? -1,
+    "bundleIdentifier": application?.bundleIdentifier ?? "",
+    "name": application?.localizedName ?? ""
+]
+let data = try! JSONSerialization.data(withJSONObject: payload)
+print(String(data: data, encoding: .utf8)!)
+`;
+  const result = await mustRun("swift", ["-e", script], { env: { TARGET_PID: String(pid) } });
+  return JSON.parse(result.stdout);
+}
+
+async function terminateApplication(pid) {
+  const script = `
+import AppKit
+import Foundation
+
+let pid = Int32(ProcessInfo.processInfo.environment["TARGET_PID"] ?? "") ?? -1
+guard let application = NSRunningApplication(processIdentifier: pid), application.terminate() else {
+    fputs("failed to terminate pid \\(pid)\\n", stderr)
+    exit(2)
+}
+`;
+  await mustRun("swift", ["-e", script], { env: { TARGET_PID: String(pid) } });
+}
+
+async function waitForOutput(application, predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const output = application.output();
+    if (predicate(output)) return output;
+    await sleep(100);
+  }
+  throw new Error("timed out waiting for application output");
+}
+
+async function waitForProcessExit(pid, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+    await sleep(100);
+  }
+  throw new Error(`process ${pid} did not exit`);
 }
 
 let syntheticInputStatusPromise = null;
@@ -456,12 +546,40 @@ async function waitForServerEvent(server, predicate, timeoutMs = 4000) {
   throw new Error("timed out waiting for local page event");
 }
 
-async function startOverlay(url) {
+async function waitForFile(filePath, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const details = await stat(filePath);
+      if (details.size > 0) return details;
+    } catch {
+      // The app writes the snapshot asynchronously after presenting the toast.
+    }
+    await sleep(100);
+  }
+  throw new Error(`timed out waiting for file ${filePath}`);
+}
+
+async function startOverlay(url, env = {}) {
   await mustRun("swift", ["build"]);
   await prepareOverlayE2EApplication();
-  const args = [overlayE2EExecutable];
+  const args = [overlayE2EExecutable, "--overlay-helper"];
   if (url) args.push(url);
-  const child = spawn(args[0], args.slice(1), { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
+  return startApplicationProcess(args, env, true);
+}
+
+async function startDockHost() {
+  await mustRun("swift", ["build"]);
+  await prepareOverlayE2EApplication();
+  return startApplicationProcess([overlayE2EExecutable], {}, false);
+}
+
+async function startApplicationProcess(args, env, waitForWindow) {
+  const child = spawn(args[0], args.slice(1), {
+    cwd: repoRoot,
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
   let stdout = "";
   let stderr = "";
   let closed = false;
@@ -478,7 +596,9 @@ async function startOverlay(url) {
     stderr += chunk;
   });
   try {
-    await waitForOverlayWindow(child.pid);
+    if (waitForWindow) {
+      await waitForOverlayWindow(child.pid);
+    }
   } catch (error) {
     if (!closed && !child.killed) child.kill();
     await closePromise;
@@ -536,17 +656,20 @@ async function prepareOverlayE2EApplication() {
   await mustRun("codesign", ["--force", "--sign", "-", "--timestamp=none", overlayE2EApplication]);
 }
 
-async function windowInfo(pid) {
+async function windowInfo(pid, windowName = "Overlay Browser") {
   const script = `
+import AppKit
 import CoreGraphics
 import Foundation
 
 let targetPID = Int(ProcessInfo.processInfo.environment["OVERLAY_PID"] ?? "") ?? -1
+let targetWindowName = ProcessInfo.processInfo.environment["OVERLAY_WINDOW_NAME"] ?? ""
 let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
 let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
 let matches = windows.filter {
     ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser"
         && ($0[kCGWindowOwnerPID as String] as? Int) == targetPID
+        && ($0[kCGWindowName as String] as? String) == targetWindowName
 }
 
 func emit(_ object: [String: Any]) {
@@ -560,13 +683,21 @@ guard let window = matches.first else {
 }
 
 let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]
+let runningApplication = NSRunningApplication(processIdentifier: pid_t(targetPID))
 emit([
     "found": true,
+    "name": window[kCGWindowName as String] as? String ?? "",
     "sharingState": window[kCGWindowSharingState as String] as? Int ?? -1,
+    "activationPolicy": runningApplication?.activationPolicy.rawValue ?? -1,
     "bounds": bounds
 ])
 `;
-  const result = await mustRun("swift", ["-e", script], { env: { OVERLAY_PID: String(pid) } });
+  const result = await mustRun("swift", ["-e", script], {
+    env: {
+      OVERLAY_PID: String(pid),
+      OVERLAY_WINDOW_NAME: windowName
+    }
+  });
   return JSON.parse(result.stdout);
 }
 
@@ -610,6 +741,7 @@ let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String:
 guard let window = windows.first(where: {
     ($0[kCGWindowOwnerName as String] as? String) == "OverlayBrowser"
         && ($0[kCGWindowOwnerPID as String] as? Int) == targetPID
+        && ($0[kCGWindowName as String] as? String) == "Overlay Browser"
 }) else {
     fputs("Overlay window not found\\n", stderr)
     exit(2)
@@ -635,7 +767,7 @@ func key(_ keyCode: Int, _ keyDown: Bool) {
 
 mouse(.leftMouseDown)
 mouse(.leftMouseUp)
-usleep(200_000)
+usleep(500_000)
 key(kVK_Command, true)
 usleep(20_000)
 key(kVK_ANSI_V, true)
@@ -669,21 +801,96 @@ async function testUnitAndExtensionSyntax() {
 }
 
 async function testOverlaySmoke() {
-  const overlay = await startOverlay();
+  const toastSnapshotPath = path.join(stateRoot, "hotkey-toast.png");
+  await rm(toastSnapshotPath, { force: true });
+  const overlay = await startOverlay(undefined, {
+    OVERLAY_TOAST_SNAPSHOT_PATH: toastSnapshotPath
+  });
   try {
     const info = await windowInfo(overlay.pid);
     if (!info.found) throw new Error("overlay window not found");
     if (info.sharingState !== 0) throw new Error(`expected sharingState=0, got ${info.sharingState}`);
-    const logs = overlay.output().stderr;
+    if (Number(info.bounds.Width) < 400 || Number(info.bounds.Height) < 800) {
+      throw new Error(`unexpected default overlay bounds ${JSON.stringify(info.bounds)}`);
+    }
+    if (info.activationPolicy !== 1) {
+      throw new Error(`expected accessory helper activation policy, got ${info.activationPolicy}`);
+    }
+
+    const toast = await windowInfo(overlay.pid, "Overlay Browser Notification: hotkeys");
+    if (!toast.found) throw new Error("startup hotkey toast was not visible");
+    if (toast.sharingState !== 0) {
+      throw new Error(`expected toast sharingState=0, got ${toast.sharingState}`);
+    }
+    const snapshot = await waitForFile(toastSnapshotPath);
+
+    let logs = overlay.output().stderr;
     if (!logs.includes("event=initial-url") || !logs.includes("https://chatgpt.com/")) {
       throw new Error("default ChatGPT navigation was not logged");
     }
-    if (!logs.includes("category=hotkey event=startup-reminder-shown")) {
+    if (!logs.includes("category=notification event=shown id=hotkeys")) {
       throw new Error("startup hotkey reminder was not shown");
     }
-    return { pid: overlay.pid, window: info };
+
+    await sleep(6200);
+    const dismissedToast = await windowInfo(overlay.pid, "Overlay Browser Notification: hotkeys");
+    if (dismissedToast.found) throw new Error("startup hotkey toast did not disappear");
+    logs = overlay.output().stderr;
+    if (!logs.includes("category=notification event=dismissed id=hotkeys reason=timeout")) {
+      throw new Error("startup hotkey toast timeout was not logged");
+    }
+
+    return {
+      pid: overlay.pid,
+      window: info,
+      toast,
+      toastSnapshotBytes: snapshot.size
+    };
   } finally {
     await overlay.stop();
+  }
+}
+
+async function testDockHostLifecycle() {
+  const host = await startDockHost();
+  let helperPID;
+  try {
+    const output = await waitForOutput(
+      host,
+      ({ stderr }) => stderr.includes("event=helper-launched")
+    );
+    const match = output.stderr.match(/event=helper-launched pid=(\d+)/);
+    if (!match) throw new Error("helper PID was not logged by Dock host");
+    helperPID = Number(match[1]);
+
+    const hostInfo = await runningApplicationInfo(host.pid);
+    if (!hostInfo.found || hostInfo.activationPolicy !== 0) {
+      throw new Error(`expected regular Dock host, got ${JSON.stringify(hostInfo)}`);
+    }
+
+    const helperInfo = await runningApplicationInfo(helperPID);
+    if (!helperInfo.found || helperInfo.activationPolicy !== 1) {
+      throw new Error(`expected accessory browser helper, got ${JSON.stringify(helperInfo)}`);
+    }
+
+    const helperWindow = await waitForOverlayWindow(helperPID);
+    if (helperWindow.sharingState !== 0) {
+      throw new Error(`expected helper sharingState=0, got ${helperWindow.sharingState}`);
+    }
+
+    await terminateApplication(host.pid);
+    await waitForProcessExit(host.pid);
+    await waitForProcessExit(helperPID);
+    return { hostPID: host.pid, helperPID, hostInfo, helperInfo, helperWindow };
+  } finally {
+    await host.stop();
+    if (helperPID) {
+      try {
+        process.kill(helperPID, "SIGTERM");
+      } catch {
+        // The normal host termination path already stopped the helper.
+      }
+    }
   }
 }
 
@@ -693,6 +900,7 @@ async function testModifierHotKeys(server) {
     throw new BlockedError("macOS did not allow synthetic HID modifier-state E2E", inputStatus);
   }
 
+  const foregroundTarget = await frontmostApplicationInfo();
   const overlay = await startOverlay(`${server.origin}/clipboard.html`);
   try {
     let info = await windowInfo(overlay.pid);
@@ -701,11 +909,34 @@ async function testModifierHotKeys(server) {
     await sleep(500);
     info = await windowInfo(overlay.pid);
     if (info.found) throw new Error("left modifier hotkey did not hide overlay");
-    await postModifierHotKey("right");
-    await sleep(600);
-    info = await windowInfo(overlay.pid);
+    await activateApplication(foregroundTarget.pid);
+    await sleep(300);
+    const foregroundBeforeShow = await frontmostApplicationInfo();
+    if (foregroundBeforeShow.pid !== foregroundTarget.pid) {
+      throw new Error(`failed to restore foreground app ${foregroundTarget.name}`);
+    }
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await postModifierHotKey("right");
+      await sleep(700);
+      info = await windowInfo(overlay.pid);
+      if (info.found) break;
+      await sleep(300);
+    }
     if (!info.found) throw new Error("right modifier hotkey did not show overlay");
-    return { pid: overlay.pid, finalWindow: info };
+    const foregroundAfterShow = await frontmostApplicationInfo();
+    if (foregroundAfterShow.pid !== foregroundBeforeShow.pid) {
+      throw new Error(
+        `hotkey changed foreground app from ${foregroundBeforeShow.name} to ${foregroundAfterShow.name}`
+      );
+    }
+    return {
+      pid: overlay.pid,
+      finalWindow: info,
+      foregroundBeforeShow,
+      foregroundAfterShow
+    };
+  } catch (error) {
+    throw new Error(`${error.message}\n${overlay.output().stderr}`);
   } finally {
     await overlay.stop();
   }
@@ -718,9 +949,12 @@ async function testOverlayPaste(server) {
   }
 
   const text = `overlay-e2e-paste-${Date.now()}`;
+  const foregroundTarget = await frontmostApplicationInfo();
   const overlay = await startOverlay(`${server.origin}/clipboard.html`);
   try {
     await waitForServerEvent(server, (event) => event.page === "clipboard" && event.type === "ready");
+    await activateApplication(foregroundTarget.pid);
+    await sleep(300);
     await pasteTextIntoOverlay(overlay.pid, text);
     const event = await waitForServerEvent(
       server,
@@ -731,7 +965,20 @@ async function testOverlayPaste(server) {
     if (occurrences !== 1) {
       throw new Error(`expected one pasted text occurrence, got ${occurrences}`);
     }
-    return { pastedText: text, inputText: event.text };
+    const foregroundAfterPaste = await frontmostApplicationInfo();
+    if (foregroundAfterPaste.pid !== foregroundTarget.pid) {
+      throw new Error(
+        `overlay input changed foreground app from ${foregroundTarget.name} to ${foregroundAfterPaste.name}`
+      );
+    }
+    return {
+      pastedText: text,
+      inputText: event.text,
+      foregroundBeforePaste: foregroundTarget,
+      foregroundAfterPaste
+    };
+  } catch (error) {
+    throw new Error(`${error.message}\n${overlay.output().stderr}`);
   } finally {
     await overlay.stop();
   }
@@ -994,6 +1241,7 @@ async function main() {
     }
     await reporter.step("unit-and-extension-syntax", testUnitAndExtensionSyntax);
     if (options.app) {
+      await reporter.step("dock-host-lifecycle", testDockHostLifecycle);
       await reporter.step("overlay-smoke-and-privacy", testOverlaySmoke);
       await reporter.step("overlay-modifier-hotkeys", () => testModifierHotKeys(server));
       await reporter.step("overlay-native-command-v-paste", () => testOverlayPaste(server));

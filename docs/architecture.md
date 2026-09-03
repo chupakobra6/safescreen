@@ -30,16 +30,18 @@ shell не используют общий runtime-код: переносима�
 - executable product `OverlayBrowser`;
 - две встроенные вкладки `WKWebView` с общими address/back/forward/reload controls: активная при
   старте ChatGPT и фоновая Google AI Studio;
-- немодальное напоминание о левой и правой modifier-only hotkey показывается сверху при каждом
-  запуске процесса и закрывается только до следующего запуска;
+- неактивирующие toast-уведомления в правом верхнем углу экрана сообщают о modifier-only hotkeys и
+  необходимости повторного входа, автоматически исчезают и имеют `sharingType = .none`;
 - постоянный WebKit-профиль через `WKWebsiteDataStore(forIdentifier:)`;
 - сохранение cookie, локального хранилища, IndexedDB и кешей между перезапусками приложения;
 - одноразовая миграция legacy-профиля SwiftPM-запуска в канонический bundle-профиль с резервной
   копией ранее созданного destination-профиля;
-- внутренний session banner, когда ChatGPT API подтверждает отсутствие активной сессии или AI
-  Studio перенаправляет вкладку на Google Accounts;
+- session toast, когда ChatGPT API подтверждает отсутствие активной сессии или AI Studio
+  перенаправляет вкладку на Google Accounts;
 - `NSPanel` с `.nonactivatingPanel`, `level = .floating`,
   `sharingType = .none`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`;
+- regular host-процесс для стандартного running indicator и `Quit` в Dock плюс отдельный accessory
+  helper-процесс для неактивирующего browser panel, WebKit, hotkeys и toast;
 - непрозрачное читаемое окно по умолчанию с content size `420x820` и стартовой позицией справа как
   узкий sidebar; приложение не задает большой минимальный размер окна, чтобы окно можно было
   свободно ресайзить;
@@ -86,7 +88,7 @@ shell не используют общий runtime-код: переносима�
 
 | Модуль | Ответственность |
 | --- | --- |
-| `OverlayBrowser` | AppKit shell: lifecycle, окно, hotkey, две вкладки, session banner и навигация `WKWebView`. |
+| `OverlayBrowser` | AppKit shell с двумя process modes: regular Dock host и accessory browser helper с toast, hotkey, вкладками и `WKWebView`. |
 | `OverlayBrowserCore` | Тестируемая логика без AppKit/WebKit shell: URL, вкладки и классификация session state. |
 | `OverlayBrowserWebKit` | Конфигурация WebKit-профиля, миграция legacy-данных и фабрика `WKWebViewConfiguration`. |
 | `Windows/src/OverlayBrowser.Windows.Core` | Переносимая логика Windows: URL, start destination, hotkey state machine и browser scripts. |
@@ -188,8 +190,10 @@ data. Обновление executable или app bundle не удаляет эт
 сохраняется. Login/OAuth navigation с `targetFrame == nil` открывается в текущем web view, а не
 теряется как неподдержанное popup-окно. После навигации ChatGPT сначала проверяет наличие видимых
 login controls, затем same-origin `/api/auth/session`; AI Studio считается требующим входа на
-`/welcome` и при редиректе на `accounts.google.com`. Session banner сообщает только об отсутствии
+`/welcome` и при редиректе на `accounts.google.com`. Session toast сообщает только об отсутствии
 активной сессии: клиент не может надежно отличить локальное истечение cookie от серверного logout.
+Повторные одинаковые уведомления подавляются до подтвержденной авторизации в соответствующей
+вкладке.
 
 `WKUserContentController` добавляет два user scripts на `documentStart` во все frames:
 
@@ -240,10 +244,17 @@ screen capture и приложений, которые используют си
 `Escape` выводит окно из input mode. Закрытие окна не завершает процесс; повторный hotkey возвращает
 панель. Клик вне окна не скрывает панель автоматически.
 
-Во время input mode окно получает key-фокус, потому macOS иначе не доставит текстовый ввод в
-`WKWebView`. При этом включение input mode использует `orderFrontRegardless()` и `makeKey()`, без
-активации приложения как обычного foreground-приложения. Выход из input mode очищает first responder
-и вызывает `resignKey()`.
+При обычном запуске executable работает как regular Dock host и запускает тот же executable с
+`--overlay-helper` как accessory child process. Host не создает браузерных окон: он обеспечивает
+running indicator, `Command+Q`, Dock `Quit` и пересылает Dock reopen helper-процессу через
+`DistributedNotificationCenter`. Helper владеет `BrowserPanel`, WebKit-профилем, hotkeys и toast.
+Завершение host останавливает helper; такая граница сохраняет стандартный Dock lifecycle, не
+переводя browser panel в regular foreground application.
+
+Во время input mode accessory helper получает key-фокус, потому macOS иначе не доставит текстовый
+ввод в `WKWebView`. При этом включение input mode использует `orderFrontRegardless()` и `makeKey()`,
+не заменяя foreground-приложение. Выход из input mode очищает first responder и вызывает
+`resignKey()`.
 
 `Command+V` обрабатывается локальным key monitor, потому `.nonactivatingPanel` не всегда надежно
 доставляет меню-команду paste в WebKit responder chain. Handler принимает только чистый
@@ -277,7 +288,8 @@ overlay.
 ## Логирование и E2E
 
 Overlay app пишет стабильный key-value формат в `stderr` с префиксом `[OverlayBrowser]`.
-Логируемые категории: `app`, `window`, `hotkey`, `input`, `navigation`, `profile`, `session`.
+Логируемые категории: `app`, `window`, `hotkey`, `input`, `navigation`, `notification`, `profile`,
+`session`.
 
 `OverlayFocusGuard` пишет диагностические записи в Chrome DevTools console с префиксом
 `[OverlayFocusGuard]` и полями `component`/`event`. CLI-инструменты для расширения используют

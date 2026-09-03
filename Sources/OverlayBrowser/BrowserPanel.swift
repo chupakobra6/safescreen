@@ -24,7 +24,7 @@ final class BrowserPanel: NSPanel {
         title = "Overlay Browser"
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
-        becomesKeyOnlyIfNeeded = true
+        becomesKeyOnlyIfNeeded = false
         titleVisibility = .visible
         titlebarAppearsTransparent = false
         isOpaque = true
@@ -72,7 +72,10 @@ final class BrowserPanel: NSPanel {
             orderFrontRegardless()
             makeKey()
             NSCursor.arrow.set()
-            AppLog.info(.input, "enter")
+            AppLog.info(.input, "enter", [
+                "appActive": NSApp.isActive ? "true" : "false",
+                "keyWindow": isKeyWindow ? "true" : "false"
+            ])
         } else {
             makeFirstResponder(nil)
             resignKey()

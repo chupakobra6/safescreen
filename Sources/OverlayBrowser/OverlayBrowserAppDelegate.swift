@@ -9,12 +9,16 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     private var browserViewController: BrowserViewController?
     private var hotKeyController: HotKeyController?
     private var keyDownMonitor: Any?
+    private var hostMonitorTimer: Timer?
+    private let notificationController = OverlayNotificationController()
 
     init(arguments: [String]) {
         self.arguments = arguments
     }
 
     deinit {
+        hostMonitorTimer?.invalidate()
+        DistributedNotificationCenter.default().removeObserver(self)
         if let keyDownMonitor {
             NSEvent.removeMonitor(keyDownMonitor)
         }
@@ -23,6 +27,8 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLog.info(.app, "launch", ["arguments": arguments.dropFirst().joined(separator: " ")])
         NSApp.setActivationPolicy(.accessory)
+        setupShowRequestObserver()
+        setupHostMonitorIfNeeded()
         guard prepareBrowserProfile() else {
             return
         }
@@ -45,23 +51,61 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupBrowserPanel() {
+        let panel = BrowserPanel()
         let viewController = BrowserViewController(
             initialDestination: URLArgumentParser.destination(from: arguments)
         )
-        let panel = BrowserPanel()
 
         viewController.onInputModeChanged = { [weak panel] enabled in
             panel?.setInputMode(enabled)
         }
+        viewController.onSessionNeedsSignIn = { [weak self] tab in
+            self?.notificationController.showSessionRequired(for: tab)
+        }
 
         panel.contentViewController = viewController
         panel.applyDefaultSidebarPlacement()
+        notificationController.anchor(to: panel)
+        notificationController.showHotKeyReminder()
         browserViewController = viewController
         browserPanel = panel
 
         panel.setInputMode(false)
         showBrowserPanel()
         AppLog.info(.app, "ready")
+    }
+
+    private func setupShowRequestObserver() {
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(handleShowRequest),
+            name: OverlayBrowserProcessMode.showBrowserNotification,
+            object: nil,
+            suspensionBehavior: .deliverImmediately
+        )
+    }
+
+    private func setupHostMonitorIfNeeded() {
+        guard let rawPID = ProcessInfo.processInfo.environment[OverlayBrowserProcessMode.hostPIDEnvironment],
+              let hostPID = Int32(rawPID) else {
+            return
+        }
+
+        let timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            guard NSRunningApplication(processIdentifier: hostPID) == nil else {
+                return
+            }
+            AppLog.warning(.app, "host-unavailable", ["pid": "\(hostPID)"])
+            NSApp.terminate(nil)
+        }
+        timer.tolerance = 0.2
+        hostMonitorTimer = timer
+        AppLog.info(.app, "host-monitor-start", ["pid": "\(hostPID)"])
+    }
+
+    @objc private func handleShowRequest() {
+        AppLog.info(.app, "helper-show-request")
+        showBrowserPanel()
     }
 
     private func prepareBrowserProfile() -> Bool {
