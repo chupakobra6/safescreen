@@ -64,6 +64,9 @@
   branded Google Chrome может игнорировать command-line unpacked extension flags.
 - E2E-runner живет в `tools/e2e/run-e2e.mjs`, поднимает локальные проверочные страницы и пишет
   отчеты в `logs/e2e-*.json`/`.log`.
+- Видимые app E2E разделены по областям и запускаются адресно через `--scenario`; полный app-прогон
+  используется только для широких изменений и релизной проверки. Одна подготовленная test-сборка
+  переиспользуется выбранными сценариями текущего запуска.
 - App E2E работает в отдельном bundle/profile namespace и проверяет persistent cookie и localStorage
   через останов и повторный запуск процесса, не используя профиль пользователя.
 - Расширенный DOM-control должен строиться внутри WebKit shell через `WKUserScript`,
@@ -113,7 +116,8 @@
 - После изменения `OverlayFocusGuard` должны проходить JS syntax checks, manifest JSON parse и
   `OverlayFocusGuardExtensionTests`.
 - После изменения app shell, hotkeys, paste, extension guard, persistence, reload или screen-share
-  privacy нужно запускать релевантный режим `tools/e2e/run-e2e.mjs`.
+  privacy нужно запускать только релевантный режим `tools/e2e/run-e2e.mjs`; полный видимый app E2E
+  нужен для широких межкомпонентных изменений и релизной проверки.
 - После изменения window privacy должен проходить runtime readback `CGWindowSharingState == 0` для
   окна процесса `OverlayBrowser`; readback должен фильтровать окно по PID тестового процесса, а не
   только по имени owner.

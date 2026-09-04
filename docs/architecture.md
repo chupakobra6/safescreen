@@ -314,7 +314,10 @@ Overlay app пишет стабильный key-value формат в `stderr` �
 
 Для app-сценариев runner собирает временный bundle
 `com.igor.safescreen.overlay-browser.e2e`, использует отдельный WebKit-профиль и удаляет его после
-прогона. Реальный пользовательский профиль E2E не читает и не очищает. Runner пишет
+прогона. Сценарии разделены на `lifecycle`, `notification`, `privacy`, `hotkeys`, `paste`,
+`persistence` и `navigation`; выбранные сценарии переиспользуют одну подготовленную test-сборку.
+Notification-сценарий ждёт не только timeout, но и фактическое удаление toast view. Реальный
+пользовательский профиль E2E не читает и не очищает. Runner пишет
 machine-readable отчет в `logs/e2e-*.json` и текстовый лог в `logs/e2e-*.log`. Шаги,
 заблокированные системными разрешениями macOS/Chrome, помечаются как `blocked`.
 

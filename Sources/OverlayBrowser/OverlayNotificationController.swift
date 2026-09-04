@@ -246,8 +246,12 @@ final class OverlayNotificationController: NSObject {
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             activeNotification.view.animator().alphaValue = 0
             activeNotification.view.superview?.animator().layoutSubtreeIfNeeded()
-        }, completionHandler: { [weak self, view = activeNotification.view] in
+        }, completionHandler: { [weak self, view = activeNotification.view, notification = activeNotification.notification] in
             view.removeFromSuperview()
+            AppLog.info(.notification, "removed", [
+                "id": notification.identifier,
+                "reason": reason
+            ])
             self?.showNextIfNeeded()
         })
 

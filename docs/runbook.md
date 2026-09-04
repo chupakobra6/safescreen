@@ -165,12 +165,34 @@ cookie/localStorage после полного рестарта,
 sample.
 Отчеты пишутся в `logs/e2e-*.json` и `logs/e2e-*.log`.
 
-Только overlay app:
+App E2E использует реальные окна macOS. При обычной разработке нужно запускать только затронутую
+область; полный app-прогон оставлен для широких изменений и релизной проверки:
 
 ```bash
 cd /Users/igor/projects/safescreen
+npm run e2e:app:notification # startup toast, внешний вид и фактическое удаление после timeout
+npm run e2e:app:paste        # обычное и password field
+npm run e2e:app:privacy      # системный capture exclusion
+npm run e2e:app:hotkeys      # левая и правая modifier-пара
+npm run e2e:app:persistence  # cookie и localStorage после рестарта
+npm run e2e:app:navigation   # popup navigation
+npm run e2e:app:lifecycle    # Dock host и browser helper
+```
+
+Несколько областей можно проверить одним запуском через запятую:
+
+```bash
+node tools/e2e/run-e2e.mjs --scenario=notification,paste
+```
+
+Только полный набор overlay app:
+
+```bash
 npm run e2e:app
 ```
+
+Адресные команды не повторяют unit-тесты и syntax checks: их отдельно выполняет `npm run check`.
+Test bundle собирается один раз и переиспользуется всеми выбранными сценариями текущего запуска.
 
 Расширение в тестовом Chrome profile:
 
@@ -497,7 +519,7 @@ swift run OverlayBrowser -- https://example.com
 обычно используют звонки и демонстрация экрана. Проект не скрывает процесс или окно от локальных
 приложений.
 
-`npm run e2e:app` дополнительно делает реальный снимок экрана через macOS `screencapture` при
+`npm run e2e:app:privacy` делает реальный снимок экрана через macOS `screencapture` при
 открытом overlay с активным встроенным toast и после закрытия overlay. Пиксели в центре браузера и
 toast должны совпасть: это защищает от отдельной capture surface уведомления. Проверка углов PNG
 toast также требует прозрачный alpha, а список окон не должен содержать отдельное toast-окно.
@@ -535,7 +557,7 @@ sharingState=0
 
 ```bash
 cd /Users/igor/projects/safescreen
-npm run e2e:app
+npm run e2e:app:persistence
 ```
 
 Шаг `overlay-cookie-and-storage-persistence` использует отдельный test bundle identifier, записывает

@@ -21,6 +21,15 @@ const overlayE2EProfile = path.join(
   "WebKit",
   overlayE2EBundleIdentifier
 );
+const appScenarios = [
+  "lifecycle",
+  "notification",
+  "privacy",
+  "hotkeys",
+  "paste",
+  "persistence",
+  "navigation"
+];
 
 class BlockedError extends Error {
   constructor(message, details = {}) {
@@ -90,10 +99,31 @@ class Reporter {
 }
 
 function parseArgs() {
-  const args = new Set(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const args = new Set(argv);
   const all = args.has("--all") || args.size === 0;
+  const requestedScenarios = argv
+    .filter((argument) => argument.startsWith("--scenario="))
+    .flatMap((argument) => argument.slice("--scenario=".length).split(","))
+    .filter(Boolean);
+  const unknownScenarios = requestedScenarios.filter((scenario) => !appScenarios.includes(scenario));
+  if (unknownScenarios.length > 0) {
+    throw new Error(
+      `unknown app scenario: ${unknownScenarios.join(", ")}; expected one of ${appScenarios.join(", ")}`
+    );
+  }
+
+  const runsApp = all || args.has("--app") || requestedScenarios.length > 0;
+  const selectedAppScenarios = all
+    ? appScenarios
+    : requestedScenarios.length > 0
+      ? requestedScenarios
+      : runsApp
+        ? appScenarios
+        : [];
   return {
-    app: all || args.has("--app"),
+    appScenarios: new Set(selectedAppScenarios),
+    checks: all || args.has("--checks"),
     extension: all || args.has("--extension"),
     screenShare: all || args.has("--screen-share"),
     reloadExtension: all || args.has("--reload-extension"),
@@ -710,16 +740,14 @@ print(String(data: payloadData, encoding: .utf8)!)
 }
 
 async function startOverlay(url, env = {}) {
-  await mustRun("swift", ["build"]);
-  await prepareOverlayE2EApplication();
+  await ensureOverlayE2EApplication();
   const args = [overlayE2EExecutable, "--overlay-helper"];
   if (url) args.push(url);
   return startApplicationProcess(args, env, true);
 }
 
 async function startDockHost() {
-  await mustRun("swift", ["build"]);
-  await prepareOverlayE2EApplication();
+  await ensureOverlayE2EApplication();
   return startApplicationProcess([overlayE2EExecutable], {}, false);
 }
 
@@ -773,6 +801,18 @@ async function waitForOverlayWindow(pid, timeoutMs = 5000) {
     await sleep(100);
   }
   throw new Error(`overlay window not ready for pid ${pid}: ${JSON.stringify(latest)}`);
+}
+
+let overlayPreparationPromise;
+
+async function ensureOverlayE2EApplication() {
+  if (!overlayPreparationPromise) {
+    overlayPreparationPromise = (async () => {
+      await mustRun("swift", ["build"]);
+      await prepareOverlayE2EApplication();
+    })();
+  }
+  return overlayPreparationPromise;
 }
 
 async function prepareOverlayE2EApplication() {
@@ -999,7 +1039,11 @@ async function testOverlaySmoke() {
       throw new Error("startup hotkey reminder was not shown inside the browser window");
     }
 
-    await sleep(6200);
+    await waitForOutput(
+      overlay,
+      ({ stderr }) => stderr.includes("category=notification event=removed id=hotkeys reason=timeout"),
+      7000
+    );
     logs = overlay.output().stderr;
     if (!logs.includes("category=notification event=dismissed id=hotkeys reason=timeout")) {
       throw new Error("startup hotkey toast timeout was not logged");
@@ -1009,6 +1053,8 @@ async function testOverlaySmoke() {
       pid: overlay.pid,
       window: info,
       embeddedToast: true,
+      autoDismissed: true,
+      removedAfterTimeout: true,
       separateToastWindow: separateToast.found,
       toastSnapshotBytes: snapshot.size,
       toastSnapshotImage: snapshotImage
@@ -1604,7 +1650,7 @@ async function testScreenSharePrivacy(server, keepChrome) {
 
 async function main() {
   const options = parseArgs();
-  const usesOverlayApplication = options.app || options.screenShare;
+  const usesOverlayApplication = options.appScenarios.size > 0 || options.screenShare;
   const reporter = new Reporter();
   await mkdir(stateRoot, { recursive: true });
   const server = await startLocalServer();
@@ -1614,15 +1660,29 @@ async function main() {
     if (usesOverlayApplication) {
       await rm(overlayE2EProfile, { recursive: true, force: true });
     }
-    await reporter.step("unit-and-extension-syntax", testUnitAndExtensionSyntax);
-    if (options.app) {
+    if (options.checks) {
+      await reporter.step("unit-and-extension-syntax", testUnitAndExtensionSyntax);
+    }
+    if (options.appScenarios.has("lifecycle")) {
       await reporter.step("dock-host-lifecycle", testDockHostLifecycle);
-      await reporter.step("overlay-smoke-and-privacy", testOverlaySmoke);
+    }
+    if (options.appScenarios.has("notification")) {
+      await reporter.step("overlay-startup-notification", testOverlaySmoke);
+    }
+    if (options.appScenarios.has("privacy")) {
       await reporter.step("system-screen-capture-overlay-exclusion", () => testSystemScreenCapturePrivacy(server));
+    }
+    if (options.appScenarios.has("hotkeys")) {
       await reporter.step("overlay-modifier-hotkeys", () => testModifierHotKeys(server));
+    }
+    if (options.appScenarios.has("paste")) {
       await reporter.step("overlay-native-command-v-paste", () => testOverlayPaste(server));
       await reporter.step("overlay-password-command-v-paste", () => testOverlayPasswordPaste(server));
+    }
+    if (options.appScenarios.has("persistence")) {
       await reporter.step("overlay-cookie-and-storage-persistence", () => testOverlayStoragePersistence(server));
+    }
+    if (options.appScenarios.has("navigation")) {
       await reporter.step("overlay-popup-navigation", () => testOverlayPopupNavigation(server));
     }
     if (options.extension) {

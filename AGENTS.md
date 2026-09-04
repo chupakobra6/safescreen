@@ -81,6 +81,9 @@
   `find . -maxdepth 3 \( -path ./.git -o -path ./.build -o -name .DS_Store \) -prune -o -type f -print | sort`.
 - Для изменений Swift-кода запускать `swift test`; при изменении GUI target дополнительно делать
   smoke-запуск из [docs/runbook.md](docs/runbook.md).
+- В интерактивной пользовательской сессии запускать только E2E-сценарий затронутой области из
+  [docs/runbook.md](docs/runbook.md). Не запускать полный видимый `npm run e2e:app` после локальной
+  правки; он предназначен для широких изменений и релизной проверки.
 - После завершения изменений macOS-приложения запускать `npm run macos:install`, чтобы постоянная
   версия `~/Applications/Overlay Browser.app` в Dock соответствовала текущему коду. Для проверки
   установленного bundle использовать `npm run macos:install-and-launch`.
