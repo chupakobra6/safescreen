@@ -313,7 +313,8 @@ dotnet run --project Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.c
 ```powershell
 dotnet restore Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
   --runtime win-x64 `
-  --locked-mode
+  --locked-mode `
+  --no-dependencies
 
 dotnet publish Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
   --configuration Release `

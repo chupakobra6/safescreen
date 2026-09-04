@@ -70,7 +70,8 @@ jobs:
           dotnet restore Windows/OverlayBrowser.Windows.sln --locked-mode
           dotnet restore Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
             --runtime win-x64 `
-            --locked-mode
+            --locked-mode `
+            --no-dependencies
 
       - name: Verify C# formatting
         shell: pwsh
