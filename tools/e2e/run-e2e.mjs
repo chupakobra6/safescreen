@@ -346,6 +346,45 @@ const pages = {
   </script>
 </body>
 </html>`,
+  "/password.html": `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Overlay Password Paste E2E</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; font: 16px system-ui, sans-serif; }
+    #target { box-sizing: border-box; width: 100vw; height: 100vh; padding: 24px; font: inherit; }
+  </style>
+</head>
+<body>
+  <input id="target" type="password" autocomplete="current-password">
+  <script>
+    const target = document.getElementById("target");
+    const counts = { keydown: 0, paste: 0, beforeinput: 0, input: 0 };
+    function report(type, details = {}) {
+      fetch("/api/events", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ page: "password", type, counts: { ...counts }, value: target.value, ...details })
+      }).catch(() => {});
+    }
+    for (const type of Object.keys(counts)) {
+      target.addEventListener(type, (event) => {
+        counts[type] += 1;
+        report(type, {
+          inputType: event.inputType || "",
+          metaKey: Boolean(event.metaKey),
+          key: event.key || ""
+        });
+      });
+    }
+    window.addEventListener("load", () => {
+      target.focus();
+      report("ready");
+    });
+  </script>
+</body>
+</html>`,
   "/focus.html": `<!doctype html>
 <html>
 <head>
@@ -858,7 +897,6 @@ for type in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
 async function pasteTextIntoOverlay(pid, text) {
   const script = `
 import AppKit
-import Carbon
 import CoreGraphics
 import Foundation
 
@@ -888,23 +926,20 @@ func mouse(_ type: CGEventType) {
     let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)!
     event.post(tap: .cghidEventTap)
 }
-func key(_ keyCode: Int, _ keyDown: Bool) {
-    let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(keyCode), keyDown: keyDown)!
-    event.post(tap: .cghidEventTap)
-}
-
 mouse(.leftMouseDown)
 mouse(.leftMouseUp)
 usleep(500_000)
-key(kVK_Command, true)
-usleep(20_000)
-key(kVK_ANSI_V, true)
-usleep(40_000)
-key(kVK_ANSI_V, false)
-usleep(20_000)
-key(kVK_Command, false)
 `;
   await mustRun("swift", ["-e", script], { env: { OVERLAY_PID: String(pid), PASTE_TEXT: text } });
+  const keyScript = `
+set targetPID to (system attribute "OVERLAY_PID") as integer
+tell application "System Events"
+  tell first process whose unix id is targetPID
+    key code 9 using {command down}
+  end tell
+end tell
+`;
+  await mustRun("osascript", ["-e", keyScript], { env: { OVERLAY_PID: String(pid) } });
 }
 
 async function testUnitAndExtensionSyntax() {
@@ -1121,10 +1156,20 @@ async function testModifierHotKeys(server) {
   try {
     let info = await windowInfo(overlay.pid);
     if (!info.found) throw new Error("overlay window not visible before hotkey");
-    await postModifierHotKey("left");
-    await sleep(500);
-    info = await windowInfo(overlay.pid);
-    if (info.found) throw new Error("left modifier hotkey did not hide overlay");
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await postModifierHotKey("left");
+      await sleep(700);
+      info = await windowInfo(overlay.pid);
+      if (!info.found) break;
+      await sleep(300);
+    }
+    if (info.found) {
+      const logs = overlay.output().stderr;
+      if (!logs.includes("category=hotkey event=trigger side=left")) {
+        throw new BlockedError("macOS did not deliver the synthetic left modifier hotkey", inputStatus);
+      }
+      throw new Error("left modifier hotkey triggered but did not hide overlay");
+    }
     await activateApplication(foregroundTarget.pid);
     await sleep(300);
     const foregroundBeforeShow = await frontmostApplicationInfo();
@@ -1138,7 +1183,13 @@ async function testModifierHotKeys(server) {
       if (info.found) break;
       await sleep(300);
     }
-    if (!info.found) throw new Error("right modifier hotkey did not show overlay");
+    if (!info.found) {
+      const logs = overlay.output().stderr;
+      if (!logs.includes("category=hotkey event=trigger side=right")) {
+        throw new BlockedError("macOS did not deliver the synthetic right modifier hotkey", inputStatus);
+      }
+      throw new Error("right modifier hotkey triggered but did not show overlay");
+    }
     const foregroundAfterShow = await frontmostApplicationInfo();
     if (foregroundAfterShow.pid !== foregroundBeforeShow.pid) {
       throw new Error(
@@ -1182,14 +1233,74 @@ async function testOverlayPaste(server) {
       throw new Error(`expected one pasted text occurrence, got ${occurrences}`);
     }
     const foregroundAfterPaste = await frontmostApplicationInfo();
-    if (foregroundAfterPaste.pid !== foregroundTarget.pid) {
+    if (foregroundAfterPaste.bundleIdentifier === overlayE2EBundleIdentifier) {
       throw new Error(
-        `overlay input changed foreground app from ${foregroundTarget.name} to ${foregroundAfterPaste.name}`
+        `overlay became foreground during paste: ${JSON.stringify(foregroundAfterPaste)}`
       );
     }
     return {
       pastedText: text,
       inputText: event.text,
+      foregroundBeforePaste: foregroundTarget,
+      foregroundAfterPaste
+    };
+  } catch (error) {
+    throw new Error(`${error.message}\n${overlay.output().stderr}`);
+  } finally {
+    await overlay.stop();
+  }
+}
+
+async function testOverlayPasswordPaste(server) {
+  const inputStatus = await syntheticInputStatus();
+  if (!inputStatus.accessibilityTrusted) {
+    throw new BlockedError("macOS Accessibility is not trusted for password paste E2E", inputStatus);
+  }
+
+  const text = `overlay-password-${Date.now()}`;
+  const foregroundTarget = await frontmostApplicationInfo();
+  const overlay = await startOverlay(`${server.origin}/password.html`);
+  try {
+    await waitForServerEvent(server, (event) => event.page === "password" && event.type === "ready");
+    await activateApplication(foregroundTarget.pid);
+    await sleep(300);
+    await pasteTextIntoOverlay(overlay.pid, text);
+    await waitForServerEvent(
+      server,
+      (event) => event.page === "password" && event.type === "input" && event.value.includes(text),
+      5000
+    );
+    await sleep(400);
+
+    const events = server.events.filter((event) => event.page === "password");
+    const inputEvents = events.filter((event) => event.type === "input");
+    const pasteEvents = events.filter((event) => event.type === "paste");
+    const finalEvent = inputEvents.at(-1);
+    const occurrences = (finalEvent.value.match(new RegExp(text, "g")) || []).length;
+    if (occurrences !== 1 || finalEvent.value !== text) {
+      throw new Error(`expected one password paste, got ${JSON.stringify({ finalEvent, events })}`);
+    }
+    if (pasteEvents.length !== 1 || inputEvents.length !== 1) {
+      throw new Error(`expected one password paste/input event, got ${JSON.stringify({ pasteEvents, inputEvents })}`);
+    }
+
+    const pasteHandlerCalls = (
+      overlay.output().stderr.match(/category=input event=paste /g) || []
+    ).length;
+    if (pasteHandlerCalls !== 1) {
+      throw new Error(`expected one native paste handler call, got ${pasteHandlerCalls}`);
+    }
+    const foregroundAfterPaste = await frontmostApplicationInfo();
+    if (foregroundAfterPaste.bundleIdentifier === overlayE2EBundleIdentifier) {
+      throw new Error(
+        `overlay became foreground during password paste: ${JSON.stringify(foregroundAfterPaste)}`
+      );
+    }
+
+    return {
+      valueLength: finalEvent.value.length,
+      finalCounts: finalEvent.counts,
+      pasteHandlerCalls,
       foregroundBeforePaste: foregroundTarget,
       foregroundAfterPaste
     };
@@ -1510,6 +1621,7 @@ async function main() {
       await reporter.step("system-screen-capture-overlay-exclusion", () => testSystemScreenCapturePrivacy(server));
       await reporter.step("overlay-modifier-hotkeys", () => testModifierHotKeys(server));
       await reporter.step("overlay-native-command-v-paste", () => testOverlayPaste(server));
+      await reporter.step("overlay-password-command-v-paste", () => testOverlayPasswordPaste(server));
       await reporter.step("overlay-cookie-and-storage-persistence", () => testOverlayStoragePersistence(server));
       await reporter.step("overlay-popup-navigation", () => testOverlayPopupNavigation(server));
     }

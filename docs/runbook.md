@@ -95,8 +95,8 @@ Dock host и browser helper, затем убирает indicator.
 - окно можно свободно ресайзить, без большого app-enforced минимального размера;
 - чтение и скролл работают без клавиаточного input mode;
 - клик в адресную строку или содержимое `WKWebView` переводит окно в input mode;
-- `Command+V` вставляет содержимое clipboard в focused поле overlay window через explicit AppKit
-  paste action; исходный key event подавляется, чтобы не было двойной вставки;
+- `Command+V` маршрутизируется штатным AppKit menu item `Edit/Paste` и вставляет содержимое
+  clipboard в текущий responder ровно один раз, включая WebKit password fields;
 - `Control+V` намеренно не считается paste shortcut;
 - hover внутри `WKWebView` остается на default cursor, включая ссылки и текстовые поля;
 - страницы не должны издавать звук через обычные `audio`/`video` пути;
@@ -159,7 +159,8 @@ swift test --filter OverlayFocusGuardExtensionTests
 Основной E2E-runner поднимает локальный HTTP-сервер с тестовыми страницами, собирает приложение,
 запускает overlay в отдельном test bundle/profile, проверяет window privacy, Dock activation
 policy, lifecycle пары Dock host/browser helper, embedded toast appearance/auto-dismiss, hotkeys,
-native `Command+V`, сохранение foreground PID, cookie/localStorage после полного рестарта,
+native `Command+V` в contenteditable и password fields, сохранение foreground PID,
+cookie/localStorage после полного рестарта,
 расширение `OverlayFocusGuard`, персистентность per-origin toggle, reload extension и screen-share
 sample.
 Отчеты пишутся в `logs/e2e-*.json` и `logs/e2e-*.log`.
@@ -475,6 +476,7 @@ swift run OverlayBrowser -- https://example.com
 - back, forward и reload работают;
 - `Left Option+Left Shift` и `Right Option+Right Shift` прячут и возвращают окно;
 - `Command+V` вставляет текст или изображение из clipboard в активное поле страницы ровно один раз;
+- password field получает один `paste`, `beforeinput` и `input` на одну команду;
 - клик по другому приложению не скрывает окно и не меняет `sharingType = .none`;
 - при hover над ссылками и текстовыми полями внутри страницы системный курсор остается стрелкой;
 - invalid URL в адресной строке не издает системный beep;

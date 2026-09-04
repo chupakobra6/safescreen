@@ -259,10 +259,11 @@ running indicator, `Command+Q`, Dock `Quit` и пересылает Dock reopen 
 не заменяя foreground-приложение. Выход из input mode очищает first responder и вызывает
 `resignKey()`.
 
-`Command+V` обрабатывается локальным key monitor, потому `.nonactivatingPanel` не всегда надежно
-доставляет меню-команду paste в WebKit responder chain. Handler принимает только чистый
-`Command+V`, вызывает native AppKit paste action для текущего focused поля и подавляет исходный key
-event, чтобы не было двойной вставки. `Control+V` не считается paste shortcut.
+Accessory helper создаёт стандартное AppKit-меню `Edit/Paste` с key equivalent `Command+V`.
+Menu item вызывает native paste action для текущего responder, включая WebKit password fields.
+Local key monitor обрабатывает только `Escape`, поэтому исходный WebKit shortcut и дополнительный
+ручной paste-handler больше не могут вставить одно содержимое параллельно. `Control+V` не считается
+paste shortcut.
 
 Ошибки provisional navigation логируются в stderr и показываются как простая HTML-страница ошибки,
 чтобы не оставлять пользователя с пустым окном без причины.
@@ -301,6 +302,8 @@ Overlay app пишет стабильный key-value формат в `stderr` �
 `tools/e2e/run-e2e.mjs` поднимает локальный HTTP-сервер и предоставляет страницы:
 
 - `clipboard.html` - contenteditable target для проверки native `Command+V`;
+- `password.html` - полноразмерное password field с подсчётом `keydown`, `paste`, `beforeinput` и
+  `input`, чтобы одна команда не вставляла пароль дважды;
 - `persistence.html` - запись и чтение persistent cookie/localStorage между двумя процессами app;
 - `popup.html`/`popup-target.html` - проверка открытия new-window navigation в текущей вкладке;
 - `focus.html` - страница с `blur`/`visibilitychange`/`pagehide`/`freeze` событиями для проверки

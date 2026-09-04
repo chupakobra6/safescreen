@@ -8,7 +8,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     private var browserPanel: BrowserPanel?
     private var browserViewController: BrowserViewController?
     private var hotKeyController: HotKeyController?
-    private var keyDownMonitor: Any?
+    private var escapeMonitor: Any?
     private var hostMonitorTimer: Timer?
     private let notificationController = OverlayNotificationController()
 
@@ -19,14 +19,15 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
     deinit {
         hostMonitorTimer?.invalidate()
         DistributedNotificationCenter.default().removeObserver(self)
-        if let keyDownMonitor {
-            NSEvent.removeMonitor(keyDownMonitor)
+        if let escapeMonitor {
+            NSEvent.removeMonitor(escapeMonitor)
         }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLog.info(.app, "launch", ["arguments": arguments.dropFirst().joined(separator: " ")])
         NSApp.setActivationPolicy(.accessory)
+        setupMainMenu()
         setupShowRequestObserver()
         setupHostMonitorIfNeeded()
         guard prepareBrowserProfile() else {
@@ -34,7 +35,7 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         }
         setupBrowserPanel()
         setupHotKey()
-        setupKeyDownMonitor()
+        setupEscapeMonitor()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -147,42 +148,38 @@ final class OverlayBrowserAppDelegate: NSObject, NSApplicationDelegate {
         hotKeyController = controller
     }
 
-    private func setupKeyDownMonitor() {
-        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyDown(event) ?? event
-        }
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+        let editMenuItem = NSMenuItem(title: "Правка", action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: "Правка")
+        let pasteItem = NSMenuItem(
+            title: "Вставить",
+            action: #selector(pasteFromMenu),
+            keyEquivalent: "v"
+        )
+        pasteItem.keyEquivalentModifierMask = [.command]
+        pasteItem.target = self
+        editMenu.addItem(pasteItem)
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+        NSApp.mainMenu = mainMenu
     }
 
-    private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
-        if event.keyCode == UInt16(kVK_Escape) {
+    private func setupEscapeMonitor() {
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == UInt16(kVK_Escape) else {
+                return event
+            }
+
             AppLog.info(.input, "escape")
-            browserViewController?.exitInputMode()
+            self?.browserViewController?.exitInputMode()
             return nil
         }
-
-        guard isCommandPasteShortcut(event), isBrowserPanelEvent(event) else {
-            return event
-        }
-
-        _ = browserViewController?.pasteFromClipboard()
-        return nil
     }
 
-    private func isCommandPasteShortcut(_ event: NSEvent) -> Bool {
-        guard event.keyCode == UInt16(kVK_ANSI_V) else {
-            return false
-        }
-
-        let relevantFlags = event.modifierFlags.intersection([.command, .control, .option, .shift, .function])
-        return relevantFlags == .command
-    }
-
-    private func isBrowserPanelEvent(_ event: NSEvent) -> Bool {
-        guard let panel = browserPanel else {
-            return false
-        }
-
-        return event.window === panel || NSApp.keyWindow === panel
+    @objc private func pasteFromMenu() {
+        let handled = browserViewController?.pasteFromClipboard() ?? false
+        AppLog.info(.input, "paste-menu", ["handled": handled ? "true" : "false"])
     }
 
     private func toggleBrowserPanel() {
