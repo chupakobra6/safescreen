@@ -64,9 +64,13 @@ jobs:
           }
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Restore .NET projects
+      - name: Restore .NET projects and win-x64 runtime
         shell: pwsh
-        run: dotnet restore Windows/OverlayBrowser.Windows.sln --locked-mode
+        run: |
+          dotnet restore Windows/OverlayBrowser.Windows.sln --locked-mode
+          dotnet restore Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
+            --runtime win-x64 `
+            --locked-mode
 
       - name: Verify C# formatting
         shell: pwsh

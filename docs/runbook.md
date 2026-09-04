@@ -311,6 +311,10 @@ dotnet run --project Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.c
 Собрать self-contained single-file executable:
 
 ```powershell
+dotnet restore Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
+  --runtime win-x64 `
+  --locked-mode
+
 dotnet publish Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.csproj `
   --configuration Release `
   --runtime win-x64 `
@@ -348,7 +352,8 @@ WebView2 Runtime, но не симулирует конкретную брауз
 
 Workflow `.github/workflows/windows.yml` на `windows-latest` выполняет:
 
-- locked restore, format, unit tests и полный solution build;
+- locked restore solution и отдельный locked restore `win-x64` runtime, format, unit tests и полный
+  solution build;
 - extension syntax и Playwright E2E с per-origin persistence;
 - self-contained `win-x64` publish;
 - установку официального WebView2 Evergreen Runtime и published `--self-test`;
