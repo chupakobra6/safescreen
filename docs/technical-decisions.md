@@ -4,12 +4,9 @@
 
 ## Текущие решения
 
-- macOS target собирается как SwiftPM package `OverlayBrowser`; Windows target живет отдельным
-  solution `Windows/OverlayBrowser.Windows.sln`.
-- Executable products: macOS `OverlayBrowser` и Windows `OverlayBrowser.Windows`.
-- Минимальные платформы: macOS 14 и Windows 10 version 2004 (`10.0.19041`).
-- UI реализуется на AppKit и WinForms без обязательных Xcode/Visual Studio GUI workflows.
-- Встроенный браузер macOS работает на `WKWebView`; Windows - на WebView2 Evergreen Runtime.
+- Поддерживаемый target собирается как SwiftPM package `OverlayBrowser` для macOS 14 и новее.
+- UI реализуется на AppKit без обязательного Xcode GUI workflow; встроенный браузер работает на
+  `WKWebView`.
 - Данные сайтов хранятся в persistent `WKWebsiteDataStore`; identity профиля состоит из стабильных
   UUID и bundle identifier `com.igor.safescreen.overlay-browser`.
 - Legacy-профиль прямого SwiftPM-запуска мигрируется в канонический bundle-профиль один раз, с
@@ -73,8 +70,14 @@
   `WKScriptMessageHandler` и доменно-ограниченные policies.
 - Проект проверяет системные macOS-инварианты capture/focus для звонков и демонстрации экрана, но
   не скрывает процесс или окно от локальных приложений.
+
+## Архив Windows
+
+Windows-прототип сохранен в `Windows/` как неподдерживаемый исходный код без CI и готовых артефактов.
+Следующие решения описывают состояние прототипа на момент архивирования, а не текущий продукт:
+
 - Windows shell использует C#/.NET 10, WinForms и прямые Win32 P/Invoke; Electron/CEF/Tauri не нужны
-  для текущего контракта.
+  для сохраненного контракта.
 - Windows website data хранится в постоянном WebView2 user data folder
   `%LOCALAPPDATA%\OverlayBrowser\WebView2`.
 - Windows WebView2 mute применяется двумя уровнями: `CoreWebView2.IsMuted = true` и document-start
@@ -91,15 +94,15 @@
 - Переносимая Windows-логика находится в `OverlayBrowser.Windows.Core` с target `net10.0`, чтобы ее
   unit-тесты выполнялись на macOS; WinForms/Win32 target cross-buildится на macOS и выполняется только
   на Windows.
-- Windows distribution - self-contained single-file `win-x64` executable, portable ZIP и unsigned
-  Inno Setup installer с официальным WebView2 Evergreen bootstrapper.
+- Архивный способ распространения использовал self-contained single-file `win-x64` executable,
+  portable ZIP и unsigned Inno Setup installer с официальным WebView2 Evergreen bootstrapper.
 - Windows self-test проверяет системный affinity contract, но финальная гарантия для конкретной
   браузерной звонилки требует ручной демонстрации `Entire screen` на целевой Windows-машине.
 
 ## Документационные правила
 
 - Активные документы описывают текущие технические факты, реализованные компоненты и явно помеченные
-  технические планы.
+  технические планы; Windows-материалы должны быть явно обозначены как архивные.
 - Старые продуктовые назначения, исторические этапы, сырые промпты и чатовые транскрипты не являются
   источником правды для репозитория.
 - Если новое решение заменяет старое, активный документ переписывается под актуальное состояние, а
@@ -121,13 +124,8 @@
 - После изменения window privacy должен проходить runtime readback `CGWindowSharingState == 0` для
   окна процесса `OverlayBrowser`; readback должен фильтровать окно по PID тестового процесса, а не
   только по имени owner.
-- После изменения Windows Core должны проходить `dotnet format --verify-no-changes`, unit tests и
-  solution build без предупреждений.
-- После изменения Windows Win32/WebView2 shell Windows CI должен публиковать executable и завершать
-  `OverlayBrowser.Windows.exe --self-test` с exact affinity `0x00000011`.
-- После изменения Windows packaging должны синхронно проходить portable ZIP и Inno Setup installer;
-  NuGet restore выполняется в locked mode.
-- После изменения shared `OverlayFocusGuard` или extension tooling extension E2E должен проходить и
-  в Windows workflow.
+- Архивный Windows-код не входит в обычную область изменений. При отдельной реактивации заново
+  определить проверки, включая locked restore, format, unit tests, solution build, publish,
+  `--self-test` и ручной screen-share smoke test.
 - После документационной чистки `rg` по активным Markdown-документам не должен находить старые
   назначения, исторические этапы или устаревшие product names.

@@ -1,9 +1,16 @@
-# Windows-версия Overlay Browser
+# Архив Windows-версии Overlay Browser
 
-Назначение: быть входной точкой для пользователя и агента, которые собирают, проверяют или исправляют
-нативную Windows-версию Overlay Browser.
+Назначение: сохранить исходный код и технический контекст одноразового Windows-прототипа Overlay
+Browser.
 
-## Что готово
+## Статус архива
+
+Основной и единственный поддерживаемый продукт репозитория — macOS-приложение `OverlayBrowser`.
+Windows-прототип был создан для разовой помощи, больше не развивается и не выпускается. Его исходники,
+тесты и installer contract сохранены для справки; GitHub Actions workflow удален. Команды ниже нужны
+только для ручного исследования архива или явно согласованной реактивации.
+
+## Что было реализовано
 
 `OverlayBrowser.Windows` - отдельное приложение на C#/.NET 10, WinForms, WebView2 и Win32. Оно не
 зависит от Swift-кода во время выполнения, но повторяет основной контракт macOS-версии:
@@ -23,9 +30,10 @@
 Расширение основного браузера не дублируется: Windows использует общую папку
 `Extensions/OverlayFocusGuard`.
 
-## Быстрый путь для пользователя
+## Архивный способ сборки
 
-Предпочтительный артефакт CI - `OverlayBrowser-Windows-x64-Setup.exe`. Installer:
+Автоматические артефакты больше не собираются. Сохраненный installer contract создавал
+`OverlayBrowser-Windows-x64-Setup.exe`, который:
 
 - ставит приложение для текущего пользователя в `%LOCALAPPDATA%\Programs\OverlayBrowser`;
 - добавляет shortcut в Start menu;
@@ -35,8 +43,8 @@
 Installer пока не подписан, поэтому Windows SmartScreen может показать предупреждение неизвестного
 издателя. Это ограничение дистрибуции, а не результат self-test.
 
-Portable-вариант лежит в `OverlayBrowser-Windows-x64.zip`. Его можно распаковать и запустить
-`OverlayBrowser.Windows.exe`; на машине должен быть WebView2 Runtime.
+Архивный portable-вариант назывался `OverlayBrowser-Windows-x64.zip`; для его запуска требовался
+WebView2 Runtime.
 
 ## Self-test
 
@@ -73,7 +81,7 @@ Self-test подтверждает, что Windows приняла и верну�
 Если overlay виден в browser screen share, не продолжать использование в звонке. Сохранить версию
 Windows, Chrome/Edge, название звонилки и приложить основной log агенту.
 
-## Разработка
+## Ручное восстановление
 
 Требования:
 
@@ -82,8 +90,8 @@ Windows, Chrome/Edge, название звонилки и приложить о
 - WebView2 Evergreen Runtime для запуска;
 - Node.js 24 только для extension E2E.
 
-Полный локальный прогон, publish и CI-команды находятся в Windows-разделах
-[runbook](../docs/runbook.md#windows-запуск-и-проверка). Перед изменением shell также прочитать
+Сохраненные команды локального прогона и publish находятся в архивных Windows-разделах
+[runbook](../docs/runbook.md#архив-windows-запуск-и-проверка). Перед изменением shell также прочитать
 [AGENTS.md](AGENTS.md), где зафиксированы fail-closed, focus и hotkey инварианты.
 
 ## Структура
@@ -94,7 +102,6 @@ Windows, Chrome/Edge, название звонилки и приложить о
 | `src/OverlayBrowser.Windows` | WinForms/WebView2 shell, Win32 privacy/focus/hotkey и self-test. |
 | `tests/OverlayBrowser.Windows.Tests` | Переносимые unit-тесты без реального Windows desktop. |
 | `installer/OverlayBrowser.Windows.iss` | Inno Setup installer и WebView2 bootstrapper contract. |
-| `.github/workflows/windows.yml` | Windows build, test, self-test, extension E2E и артефакты. |
 
 ## Границы гарантии
 

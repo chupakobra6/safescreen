@@ -1,16 +1,18 @@
-# Правила Windows-подпроекта Overlay Browser
+# Правила архивного Windows-подпроекта Overlay Browser
 
-Назначение: дать агенту на Windows короткий источник правил, команд и проверочных инвариантов для
-поддержки `OverlayBrowser.Windows`.
+Назначение: сохранить технические инварианты одноразового Windows-прототипа без объявления его
+поддерживаемым продуктом.
 
 ## Область
 
 - Этот файл действует для всей папки `Windows/`.
 - Общие правила репозитория находятся в [../AGENTS.md](../AGENTS.md).
+- Windows-версия архивирована: исходники сохранены для справки, автоматический workflow удален,
+  готовые сборки не выпускаются.
+- Не изменять и не реактивировать подпроект без прямой просьбы пользователя.
 - Техническое устройство Windows-версии описано в [README.md](README.md) и
   [../docs/architecture.md](../docs/architecture.md).
-- Канонические команды находятся в [../docs/runbook.md](../docs/runbook.md).
-- Разработка должна работать через `dotnet` и PowerShell без обязательного Visual Studio GUI.
+- Сохраненные ручные команды находятся в [../docs/runbook.md](../docs/runbook.md).
 
 ## Инварианты поведения
 
@@ -38,24 +40,24 @@
 - Расширение `OverlayFocusGuard` общее для macOS и Windows. Не создавать отдельную копию extension
   внутри `Windows/`.
 
-## Каноническая проверка
+## Сохраненная проверка
 
-Канонические PowerShell-команды locked restore, format, unit tests, solution build, publish и self-test
-находятся в разделах `Windows` документа [../docs/runbook.md](../docs/runbook.md#windows-запуск-и-проверка).
-Не копировать их в новые документы или scripts без отдельной причины.
+Сохраненные PowerShell-команды locked restore, format, unit tests, solution build, publish и self-test
+находятся в архивных разделах документа
+[../docs/runbook.md](../docs/runbook.md#архив-windows-запуск-и-проверка). Не копировать их в новые
+документы или scripts без отдельной причины.
 
 Self-test обязан подтвердить Windows build, наличие WebView2 Runtime и exact affinity `0x00000011`.
 Он проверяет системную настройку окна, но не заменяет ручную демонстрацию полного экрана в Chrome или
 Edge.
 
-## Изменения и CI
+## Условия реактивации
 
 - При изменении NuGet dependencies обновлять соответствующий `packages.lock.json` командой
   обновления lock graph из runbook, затем снова проверять locked restore.
-- При изменении output, runtime identifier или имени executable синхронно обновлять
-  [installer/OverlayBrowser.Windows.iss](installer/OverlayBrowser.Windows.iss) и
-  [../.github/workflows/windows.yml](../.github/workflows/windows.yml).
-- Windows CI является источником готовых `OverlayBrowser-Windows-x64.zip` и
-  `OverlayBrowser-Windows-x64-Setup.exe`.
+- При реактивации output, runtime identifier и имя executable должны оставаться синхронными с
+  [installer/OverlayBrowser.Windows.iss](installer/OverlayBrowser.Windows.iss).
+- Автоматического Windows CI и поддерживаемых `OverlayBrowser-Windows-x64.zip`/
+  `OverlayBrowser-Windows-x64-Setup.exe` больше нет. Новый workflow требует отдельного решения.
 - Не считать cross-build на macOS доказательством реального focus/capture поведения Win32. Для этого
   обязательны Windows self-test и один ручной screen-share smoke test из [README.md](README.md).

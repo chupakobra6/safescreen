@@ -1,14 +1,12 @@
 # Ранбук Overlay Browser
 
-Назначение: хранить команды запуска, сборки, проверки и ручные сценарии для текущих приложений
-Overlay Browser.
+Назначение: хранить команды запуска, сборки, проверки и ручные сценарии для поддерживаемого macOS-
+приложения Overlay Browser и отдельно помеченного Windows-архива.
 
 ## Среда
 
 - macOS working directory: `/Users/igor/projects/safescreen`; SwiftPM через Command Line Tools, без
   обязательного Xcode GUI; минимальная платформа macOS 14; executable `OverlayBrowser`.
-- Windows working directory: корень checkout репозитория; .NET 10 CLI и PowerShell без обязательного
-  Visual Studio GUI; минимальная версия Windows `10.0.19041`; executable `OverlayBrowser.Windows`.
 
 Проверить окружение:
 
@@ -245,13 +243,16 @@ trust для процесса, который отправляет синтет�
 
 Команды tooling для extension пишут в stdout с префиксом `[OverlayFocusGuardTools]`.
 
-Windows-приложение пишет тот же key-value формат в файл:
+Архивное Windows-приложение писало тот же key-value формат в файл:
 
 ```text
 %LOCALAPPDATA%\OverlayBrowser\logs\overlay-browser.log
 ```
 
-## Windows: запуск и проверка
+## Архив Windows: запуск и проверка
+
+Windows-прототип не поддерживается, не изменяется в обычной разработке и не имеет CI. Следующие
+команды сохранены только для ручного исследования архива или отдельно согласованной реактивации.
 
 Проверить среду из PowerShell в корне checkout:
 
@@ -306,7 +307,7 @@ dotnet run --project Windows/src/OverlayBrowser.Windows/OverlayBrowser.Windows.c
 - страницы не издают звук, cursor внутри страницы и address field остается arrow;
 - startup прекращается с ошибкой, если affinity `0x00000011` не установился и не прочитался обратно.
 
-## Windows: publish и self-test
+## Архив Windows: publish и self-test
 
 Собрать self-contained single-file executable:
 
@@ -349,36 +350,14 @@ Self-test passed.
 Self-test возвращает exit code `1` при любой ошибке. Он проверяет реальный Win32 top-level HWND и
 WebView2 Runtime, но не симулирует конкретную браузерную звонилку.
 
-## Windows: CI и installer
+## Архив Windows: installer
 
-Workflow `.github/workflows/windows.yml` на `windows-latest` выполняет:
+GitHub Actions workflow удален, поэтому автоматические portable/installer artifacts больше не
+создаются. Сохраненный installer contract находится в
+`Windows/installer/OverlayBrowser.Windows.iss`; его ручная сборка требует Inno Setup 6 и отдельно
+загруженного официального WebView2 bootstrapper.
 
-- locked restore solution и отдельный locked restore `win-x64` runtime, format, unit tests и полный
-  solution build;
-- extension syntax и Playwright E2E с per-origin persistence;
-- self-contained `win-x64` publish;
-- установку официального WebView2 Evergreen Runtime и published `--self-test`;
-- portable `OverlayBrowser-Windows-x64.zip`;
-- unsigned Inno Setup `OverlayBrowser-Windows-x64-Setup.exe`, который включает официальный
-  WebView2 bootstrapper.
-
-Запустить workflow вручную после публикации репозитория на GitHub:
-
-```powershell
-gh workflow run Windows
-gh run watch
-```
-
-Скачать готовые artifacts последнего успешного run:
-
-```powershell
-gh run download --name OverlayBrowser-Windows-x64
-```
-
-Локальная сборка installer повторяет шаг `Build installer` из workflow и требует Inno Setup 6.
-Источник installer contract: `Windows/installer/OverlayBrowser.Windows.iss`.
-
-## Windows: ручной screen-share smoke test
+## Архив Windows: ручной screen-share smoke test
 
 После успешного self-test один раз выполнить сценарий из
 [../Windows/README.md](../Windows/README.md#обязательный-ручной-screen-share-smoke-test) на целевой

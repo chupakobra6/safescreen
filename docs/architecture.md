@@ -11,15 +11,12 @@
 
 ## Текущая форма
 
-Overlay Browser состоит из двух нативных desktop-приложений с одним поведенческим контрактом:
+Overlay Browser — поддерживаемое нативное macOS-приложение на SwiftPM, AppKit и WebKit. Оно открывает
+веб-страницы во встроенном браузере, хранит website data в постоянном профиле и предоставляет
+управляемое topmost-окно поверх обычных desktop-приложений.
 
-- macOS-приложение на SwiftPM, AppKit и WebKit;
-- Windows-приложение на C#/.NET 10, WinForms, WebView2 и Win32.
-
-Оба приложения открывают веб-страницы во встроенном браузере, хранят website data в постоянном
-профиле и предоставляют управляемое topmost-окно поверх обычных desktop-приложений. Платформенные
-shell не используют общий runtime-код: переносимая логика Windows вынесена в отдельную
-`OverlayBrowser.Windows.Core`, а общий продуктовый контракт защищается тестами и документацией.
+Одноразовый C#/.NET/WinForms/WebView2 прототип сохранен в `Windows/` как архив. Он не входит в текущий
+продукт, не развивается и не имеет CI или поддерживаемых сборок.
 
 В репозитории также есть companion extension `OverlayFocusGuard` для основного Chrome/Chromium
 браузера. Оно не является частью overlay window: расширение нужно для сайтов, которые должны
@@ -60,6 +57,9 @@ shell не используют общий runtime-код: переносима�
   cookie/localStorage persistence после рестарта, focus guard, extension reload и screen-share
   privacy sample;
 - стартовая HTML-страница как fallback для невалидного явного URL;
+
+Архив Windows содержит:
+
 - executable product `OverlayBrowser.Windows` в отдельном `Windows/` подпроекте;
 - WinForms/WebView2 shell с теми же navigation controls, ChatGPT по умолчанию, постоянным профилем,
   fixed cursor, silent media policy, resizable sidebar `420x820` и нативным `Ctrl+V`;
@@ -69,9 +69,7 @@ shell не используют общий runtime-код: переносима�
   readback `GetWindowDisplayAffinity == 0x00000011` и fail-closed startup;
 - modifier-only Windows hotkeys `Left Alt+Left Shift` и `Right Alt+Right Shift` через
   `WH_KEYBOARD_LL`, без подавления исходных клавиатурных событий;
-- Windows single-instance coordination, tray lifecycle, file logging и встроенный `--self-test`;
-- Windows CI с unit tests, extension E2E, self-contained `win-x64` executable, portable ZIP и Inno
-  Setup installer с WebView2 Evergreen bootstrapper.
+- Windows single-instance coordination, tray lifecycle, file logging и встроенный `--self-test`.
 
 Не реализовано:
 
@@ -80,10 +78,6 @@ shell не используют общий runtime-код: переносима�
 - хранилище пользовательских правил DOM-control;
 - доверенная подпись Apple Developer ID и notarization macOS-сборки;
 - публикация `OverlayFocusGuard` в Chrome Web Store;
-- подпись Windows executable/installer доверенным code-signing сертификатом;
-- полностью автоматизированная проверка пикселей реальной демонстрации экрана Windows в конкретной
-  браузерной звонилке: Windows self-test проверяет системный affinity contract, а финальный capture
-  path пока требует один ручной smoke test на целевой машине.
 
 ## Модули
 
@@ -92,10 +86,10 @@ shell не используют общий runtime-код: переносима�
 | `OverlayBrowser` | AppKit shell с двумя process modes: regular Dock host и accessory browser helper с toast, hotkey, вкладками и `WKWebView`. |
 | `OverlayBrowserCore` | Тестируемая логика без AppKit/WebKit shell: URL, вкладки и классификация session state. |
 | `OverlayBrowserWebKit` | Конфигурация WebKit-профиля, миграция legacy-данных и фабрика `WKWebViewConfiguration`. |
-| `Windows/src/OverlayBrowser.Windows.Core` | Переносимая логика Windows: URL, start destination, hotkey state machine и browser scripts. |
-| `Windows/src/OverlayBrowser.Windows` | WinForms/WebView2 shell, Win32 privacy/focus/hotkey, lifecycle, logging и self-test. |
-| `Windows/tests/OverlayBrowser.Windows.Tests` | Unit-тесты Windows Core, запускаемые и на macOS, и на Windows. |
-| `Windows/installer` | Inno Setup contract для per-user installer и WebView2 bootstrapper. |
+| `Windows/src/OverlayBrowser.Windows.Core` | Архивная переносимая логика Windows: URL, start destination, hotkey state machine и browser scripts. |
+| `Windows/src/OverlayBrowser.Windows` | Архивный WinForms/WebView2 shell, Win32 privacy/focus/hotkey, lifecycle, logging и self-test. |
+| `Windows/tests/OverlayBrowser.Windows.Tests` | Архивные unit-тесты Windows Core. |
+| `Windows/installer` | Архивный Inno Setup contract для per-user installer и WebView2 bootstrapper. |
 | `Packaging/macOS` | Метаданные app bundle и инструкция получателю переносимого macOS-архива. |
 | `Extensions/OverlayFocusGuard` | Локальное Chrome/Chromium MV3-расширение для per-origin focus/visibility guard в основном браузере. |
 | `tools/e2e` | Node E2E-runner: локальные HTML-страницы, запуск overlay, Chrome/Playwright проверки и отчеты в `logs/`. |
@@ -103,7 +97,6 @@ shell не используют общий runtime-код: переносима�
 | `OverlayBrowserCoreTests` | Тесты URL-нормализации и стартовой страницы. |
 | `OverlayBrowserWebKitTests` | Тесты persistent data store, стабильного UUID и безопасной миграции профиля. |
 | `OverlayFocusGuardExtensionTests` | Тесты manifest и ключевых инвариантов browser extension. |
-| `.github/workflows/windows.yml` | Windows build/test/package pipeline и готовые CI artifacts. |
 
 `tools/macos/package-portable.sh` собирает release-бинарники `arm64` и `x86_64` с минимальной
 платформой macOS 14, объединяет их в универсальный `Overlay Browser.app`, выполняет ad-hoc подпись
@@ -131,7 +124,7 @@ WKWebViewConfiguration from BrowserProfile
 WKWebView
 ```
 
-Windows runtime-поток:
+Архивный Windows runtime-поток:
 
 ```text
 command-line arguments
@@ -153,7 +146,8 @@ WebView2
 
 Запуск с URL:
 
-- macOS `URLArgumentParser` и Windows `UrlPolicy` берут первый значимый URL-аргумент;
+- macOS `URLArgumentParser` берет первый значимый URL-аргумент; архивный Windows `UrlPolicy` делал
+  то же самое;
 - URL без схемы нормализуется в `https://...`;
 - разрешены только `http` и `https`;
 - отсутствующий URL открывает `https://chatgpt.com/`;
@@ -207,7 +201,7 @@ login controls, затем same-origin `/api/auth/session`; AI Studio счита
 `WKWebView`, но hover не должен менять системный указатель на I-beam или hand, а страницы не должны
 издавать звук через обычные `audio`/`video` media пути.
 
-### Windows WebView2
+### Архив: Windows WebView2
 
 `BrowserForm` создает `CoreWebView2Environment` с user data folder
 `%LOCALAPPDATA%\OverlayBrowser\WebView2`. Папка постоянная и хранит cookie, login, local storage,
@@ -268,7 +262,7 @@ paste shortcut.
 Ошибки provisional navigation логируются в stderr и показываются как простая HTML-страница ошибки,
 чтобы не оставлять пользователя с пустым окном без причины.
 
-### Windows
+### Архив: Windows
 
 `BrowserForm` - resizable topmost WinForms window без taskbar button. `ShowWithoutActivation`,
 `ShowWindow(SW_SHOWNOACTIVATE)` и `SetWindowPos(..., SWP_NOACTIVATE)` используются при первом показе,
@@ -321,11 +315,11 @@ Notification-сценарий ждёт не только timeout, но и фак
 machine-readable отчет в `logs/e2e-*.json` и текстовый лог в `logs/e2e-*.log`. Шаги,
 заблокированные системными разрешениями macOS/Chrome, помечаются как `blocked`.
 
-Windows Core unit tests запускаются на любой платформе с .NET 10. На Windows опубликованный executable
-дополнительно запускается с `--self-test`: проверяются версия OS, наличие WebView2 Runtime, URL policy
-и реальный top-level HWND affinity readback. GitHub Actions выполняет эти проверки, extension E2E и
-собирает portable/installer artifacts. Self-test не подменяет ручную проверку browser screen share,
-потому что конкретная звонилка может выбирать собственный capture path.
+Сохраненные Windows Core unit tests можно вручную запустить на любой платформе с .NET 10. Архивный
+`--self-test` проверяет версию OS, наличие WebView2 Runtime, URL policy и реальный top-level HWND
+affinity readback. Автоматического Windows workflow больше нет; self-test не подменяет ручную
+проверку browser screen share, потому что конкретная звонилка может выбирать собственный capture
+path.
 
 ## DOM-Control Слой
 
@@ -380,12 +374,11 @@ blur/hidden events; при выключении остаются инертны�
 
 ## Технические ограничения
 
-- Базовый runtime macOS - WebKit; базовый runtime Windows - WebView2 Evergreen.
-- Минимальная платформа SwiftPM package - macOS 14; Windows target - Windows 10 version 2004
-  (`10.0.19041`) или новее.
-- Основной workflow macOS - Command Line Tools и SwiftPM; Windows - .NET CLI и PowerShell.
-- UI создается кодом AppKit/WinForms; Xcode и Visual Studio projects для GUI workflow не требуются.
-- Windows code можно cross-build/publish на macOS, но Win32 focus/capture contract проверяется только
-  Windows self-test и ручным screen-share smoke test.
+- Базовый runtime поддерживаемого продукта — WebKit; минимальная платформа SwiftPM package — macOS
+  14; основной workflow — Command Line Tools и SwiftPM.
+- UI создается кодом AppKit; Xcode project для GUI workflow не требуется.
+- Архивный Windows-код использует WebView2 Evergreen и рассчитан на Windows 10 version 2004
+  (`10.0.19041`) или новее. Его можно cross-build/publish на macOS, но Win32 focus/capture contract
+  проверяется только Windows self-test и ручным screen-share smoke test.
 - Документация описывает технические свойства текущего приложения и ближайшие технические точки
   расширения, без исторических продуктовых сценариев.

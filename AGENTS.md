@@ -8,20 +8,20 @@
 - [docs/technical-decisions.md](docs/technical-decisions.md) - устойчивые технические решения и
   ограничения.
 - [docs/runbook.md](docs/runbook.md) - команды запуска, сборки, проверок и ручных сценариев.
-- [Windows/README.md](Windows/README.md) - входная точка для Windows-пользователя и агента.
+- [Windows/README.md](Windows/README.md) - описание сохраненного архивного Windows-прототипа.
 
 ## Область проекта
 
-- Эта папка является рабочим пространством Overlay Browser: нативных macOS и Windows приложений для
-  внутреннего использования компании.
-- Текущие executable products: macOS `OverlayBrowser` и Windows `OverlayBrowser.Windows`.
+- Эта папка является рабочим пространством активного macOS-приложения Overlay Browser. Одноразовый
+  Windows-прототип сохранен в `Windows/` только как архивный исходный код.
+- Текущий executable product: macOS `OverlayBrowser`.
 - Общие правила для `/Users/igor/projects` лежат в `/Users/igor/projects/AGENTS.md`; этот файл
   содержит только дополнения для этого репозитория.
 - Разработка полностью агентная: не планировать рабочий процесс, требующий ручной работы в Xcode
   GUI. Базовый путь для кода - CLI/SwiftPM через Command Line Tools; Xcode GUI допустим только как
   дополнительный инструмент для профилирования или подписи, если позже понадобится.
-- Windows-подпроект также разрабатывается через CLI (`dotnet`, PowerShell, GitHub Actions), без
-  обязательного Visual Studio GUI; scoped-правила находятся в [Windows/AGENTS.md](Windows/AGENTS.md).
+- Windows-подпроект не поддерживается и не имеет CI. Не возобновлять его разработку без прямой
+  просьбы; архивный контекст находится в [Windows/AGENTS.md](Windows/AGENTS.md).
 - В корне проекта нет `README.md`; текущая навигация идет через этот файл и
   [docs/architecture.md](docs/architecture.md). Не создавать корневой README без прямой просьбы.
 
@@ -44,7 +44,7 @@
 | `docs/architecture.md` | Текущую техническую архитектуру, модули, runtime-потоки, implemented/planned границы. | Исторические продуктовые сценарии, правила работы агентов, команды запуска. |
 | `docs/technical-decisions.md` | Короткие устойчивые технические решения и ограничения. | Сырые промпты, транскрипты, подробный runbook, устаревшие альтернативы. |
 | `docs/runbook.md` | Команды запуска, сборки, тестов, smoke-проверок и ручной проверки UI. | Архитектуру, roadmap, историю решений. |
-| `Windows/README.md` | Передача Windows-сборки пользователю и агенту: быстрый старт, self-test, ручной screen-share smoke test, карта подпроекта. | Общую архитектуру обеих платформ, историю требований. |
+| `Windows/README.md` | Статус и технический контекст архивного Windows-прототипа. | Текущую архитектуру macOS-приложения, правила активной разработки. |
 
 ## Правило добавления смысла
 
@@ -71,8 +71,7 @@
 - Проверить структуру: `find . -maxdepth 3 \( -path ./.git -o -path ./.build -o -name .DS_Store \) -prune -o -type f -print | sort`
 - Проверить рабочее дерево: `git status --short`
 - Команды запуска и проверки: [docs/runbook.md](docs/runbook.md)
-- Текущее состояние: SwiftPM/AppKit/WebKit приложение `OverlayBrowser` и
-  .NET/WinForms/WebView2 приложение `OverlayBrowser.Windows`.
+- Текущее состояние: SwiftPM/AppKit/WebKit приложение `OverlayBrowser`; Windows-код архивирован.
 
 ## Проверка
 
@@ -87,9 +86,8 @@
 - После завершения изменений macOS-приложения запускать `npm run macos:install`, чтобы постоянная
   версия `~/Applications/Overlay Browser.app` в Dock соответствовала текущему коду. Для проверки
   установленного bundle использовать `npm run macos:install-and-launch`.
-- Для изменений `Windows/` запускать `dotnet format --verify-no-changes`, переносимые unit-тесты и
-  полный Windows solution build из [docs/runbook.md](docs/runbook.md). После изменений Win32/WebView2
-  shell Windows CI должен дополнительно пройти published `--self-test`.
+- Не изменять `Windows/` в рамках обычной разработки. Если пользователь отдельно попросит
+  реактивировать прототип, сначала согласовать актуальный объем проверок и восстановления CI.
 - Для архитектурных правок сверять [docs/architecture.md](docs/architecture.md) с
   [docs/technical-decisions.md](docs/technical-decisions.md).
 - Для правок области документации проверять, что технические решения не остались в `AGENTS.md`, а
